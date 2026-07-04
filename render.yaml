@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: dividi-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: REQUIRE_INVITE
+        value: "true"
