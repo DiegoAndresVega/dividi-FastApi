@@ -1,0 +1,62 @@
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.dependencies import get_current_user, get_group_or_404, require_membership
+from app.models import Payment, User
+from app.schemas.payment import PaymentCreate, PaymentOut
+
+router = APIRouter(prefix="/groups/{group_id}/payments", tags=["payments"])
+
+
+@router.post("", response_model=PaymentOut, status_code=status.HTTP_201_CREATED)
+def create_payment(
+    group_id: uuid.UUID,
+    payload: PaymentCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    group = get_group_or_404(db, group_id)
+    require_membership(group, user)
+
+    member_ids = {m.id for m in group.members}
+    if payload.from_member_id not in member_ids or payload.to_member_id not in member_ids:
+        raise HTTPException(
+            status_code=400, detail="Ambos miembros deben pertenecer al grupo"
+        )
+    if payload.from_member_id == payload.to_member_id:
+        raise HTTPException(
+            status_code=400, detail="El pagador y el receptor no pueden ser el mismo"
+        )
+
+    payment = Payment(
+        group_id=group.id,
+        from_member_id=payload.from_member_id,
+        to_member_id=payload.to_member_id,
+        amount=payload.amount,
+        paid_at=payload.paid_at or datetime.now(timezone.utc),
+        note=payload.note,
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+    return payment
+
+
+@router.get("", response_model=list[PaymentOut])
+def list_payments(
+    group_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    group = get_group_or_404(db, group_id)
+    require_membership(group, user)
+    return db.scalars(
+        select(Payment)
+        .where(Payment.group_id == group.id)
+        .order_by(Payment.paid_at.desc())
+    ).all()
