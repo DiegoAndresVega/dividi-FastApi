@@ -1,4 +1,4 @@
-# 💸 Dividi
+# Dividi
 
 API REST de gastos compartidos tipo **Tricount/Splitwise** construida con FastAPI: grupos de gastos, 4 métodos de división (incluyendo porcentajes por persona configurables a nivel de grupo con override por gasto), balances netos, **simplificación automática de deudas** y registro por invitación.
 
@@ -6,11 +6,11 @@ API REST de gastos compartidos tipo **Tricount/Splitwise** construida con FastAP
 
 ---
 
-## 🚀 Levantar el proyecto en 2 comandos
+## Puesta en marcha
 
 ```bash
 cp .env.example .env
-docker-compose up --build
+docker compose up --build
 ```
 
 API en `http://localhost:8000` — Swagger UI en `http://localhost:8000/docs`.
@@ -24,7 +24,7 @@ alembic upgrade head        # aplica migraciones (requiere DATABASE_URL)
 uvicorn app.main:app --reload
 ```
 
-## 🧪 Tests
+## Tests
 
 ```bash
 pytest
@@ -36,7 +36,7 @@ pytest
 - `test_debt_simplifier.py` — deudas circulares, grupos saldados, residuos de redondeo, verificación de que las transacciones sugeridas realmente saldan todos los balances.
 - `test_invitations.py` — bootstrap del fundador, códigos de un solo uso, invitaciones atadas a email, caducidad y revocación.
 
-## 📐 Modelo de datos
+## Modelo de datos
 
 ```mermaid
 erDiagram
@@ -97,7 +97,7 @@ erDiagram
     }
 ```
 
-## ➗ Los 4 métodos de división
+## Métodos de división
 
 Ejemplo: gasto de **100 €** en un grupo de 3 (Ana, Bea, Carlos).
 
@@ -112,7 +112,7 @@ Ejemplo: gasto de **100 €** en un grupo de 3 (Ana, Bea, Carlos).
 
 **Regla de redondeo**: cada parte se redondea a 2 decimales (`ROUND_HALF_UP`) y **el último participante de la lista absorbe la diferencia**, de modo que la suma de las partes siempre es exactamente el importe del gasto. Ej.: 10 € entre 3 → 3.33 + 3.33 + 3.34.
 
-## ⚖️ Balances y simplificación de deudas
+## Balances y simplificación de deudas
 
 ### Balance neto por miembro
 
@@ -145,7 +145,7 @@ Garantiza como máximo **n−1 transacciones** y corre en **O(n log n)** por las
 
 Settle-up sugiere 2 transacciones: `Bea → Ana: 30 €` y `Carlos → Ana: 30 €`. Sin simplificación, un histórico largo de gastos cruzados puede requerir muchas más.
 
-## 🔑 API
+## API
 
 | Método | Ruta | Descripción |
 |---|---|---|
@@ -176,7 +176,7 @@ POST /groups/{id}/members
 
 **Invitados sin cuenta**: se añade un miembro solo con `display_name` o con un `email` aún no registrado. Cuando esa persona se registra con ese email, su cuenta se vincula automáticamente a todas sus memberships pendientes.
 
-## 🧠 Decisiones técnicas
+## Decisiones técnicas
 
 - **PostgreSQL y no SQLite** en producción: tipos `NUMERIC` reales para dinero, concurrencia, `UUID` nativo. SQLite solo en tests por velocidad y cero setup (SQLAlchemy abstrae la diferencia).
 - **`Decimal` en toda la cadena** (SQLAlchemy `Numeric` + Pydantic `Decimal`): jamás floats para dinero.
@@ -186,7 +186,7 @@ POST /groups/{id}/members
 - **Validación de invariantes en el service layer** (porcentajes suman 100, exact suma el total) con excepciones de dominio (`SplitValidationError`) traducidas a HTTP 400 en el router.
 - **Alembic desde el día 1**: el esquema evoluciona con migraciones versionadas, no con `create_all`.
 
-## 📂 Estructura
+## Estructura
 
 ```
 app/
@@ -195,18 +195,19 @@ app/
 ├── database.py           # engine, sesión, Base
 ├── security.py           # bcrypt + JWT
 ├── dependencies.py       # get_current_user, permisos de grupo
-├── models/               # SQLAlchemy: User, Group, GroupMember, Expense, ExpenseSplit, Payment
+├── models/               # SQLAlchemy: User, Group, GroupMember, Expense, ExpenseSplit, Payment, Invitation
 ├── schemas/              # Pydantic v2: request/response
-├── routers/              # auth, groups (+balances/settle-up), expenses, payments
+├── routers/              # auth, invitations, groups (+balances/settle-up), expenses, payments
 └── services/
     ├── split_calculator.py   # los 4 métodos de división + redondeo
     ├── debt_simplifier.py    # greedy del minimum cash flow
-    └── balance_service.py    # balance neto por miembro
+    ├── balance_service.py    # balance neto por miembro
+    └── invitation_service.py # códigos de acceso invite-only
 alembic/                  # migraciones
 tests/                    # 86 tests: unitarios + integración end-to-end
 ```
 
-## 🗺️ Roadmap (Fase 3)
+## Roadmap
 
 - Exportación PDF/CSV del resumen de grupo
 - Subida de imagen de recibo (`receipt_image_url` ya previsto en el modelo)
