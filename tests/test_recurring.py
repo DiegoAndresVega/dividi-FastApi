@@ -70,6 +70,26 @@ def test_due_rule_materializes_expenses_on_listing(client):
     assert len([g for g in gastos if g["description"] == "Alquiler"]) == 2
 
 
+def test_rule_con_categoria_personalizada_propaga_el_emoji(client):
+    headers = register_and_login(client, "ana@example.com")
+    group, owner, _, _ = make_standard_group(client, headers)
+
+    rule = create_rule(
+        client, headers, group["id"], owner["id"],
+        description="Recibo del agua",
+        category="agua",
+        category_icon="💧",
+        start_period=current_period(),
+    )
+    assert rule["category"] == "agua"
+    assert rule["category_icon"] == "💧"
+
+    gastos = client.get(f"/groups/{group['id']}/expenses", headers=headers).json()
+    recibo = next(g for g in gastos if g["description"] == "Recibo del agua")
+    assert recibo["category"] == "agua"
+    assert recibo["category_icon"] == "💧"
+
+
 def test_materialized_expenses_hit_balances(client):
     headers = register_and_login(client, "ana@example.com")
     group, owner, _, _ = make_standard_group(client, headers)

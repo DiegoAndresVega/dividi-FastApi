@@ -35,6 +35,112 @@ def test_gasto_equal_sin_splits_reparte_entre_todo_el_grupo(client):
     assert expense["currency"] == "EUR"
 
 
+def test_gasto_acepta_categorias_nuevas(client):
+    headers = register_and_login(client, "ana@example.com", "Ana")
+    group, owner, bea, carlos = make_standard_group(client, headers)
+
+    categorias = (
+        "supermercado", "gasolina", "casa", "bar",
+        "recibos", "telefono", "viajes", "membresia",
+    )
+    for categoria in categorias:
+        response = client.post(
+            f"/groups/{group['id']}/expenses",
+            json={
+                "description": f"Gasto {categoria}",
+                "amount": "10",
+                "paid_by": owner["id"],
+                "split_method": "equal",
+                "category": categoria,
+            },
+            headers=headers,
+        )
+        assert response.status_code == 201, response.text
+        expense = response.json()
+        assert expense["category"] == categoria
+        assert expense["category_icon"] is None
+
+
+def test_gasto_con_categoria_personalizada_y_emoji(client):
+    headers = register_and_login(client, "ana@example.com", "Ana")
+    group, owner, bea, carlos = make_standard_group(client, headers)
+
+    response = client.post(
+        f"/groups/{group['id']}/expenses",
+        json={
+            "description": "Recibo del agua",
+            "amount": "30",
+            "paid_by": owner["id"],
+            "split_method": "equal",
+            # el nombre se normaliza (espacios fuera, minúsculas)
+            "category": "  Agua ",
+            "category_icon": "💧",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 201, response.text
+    expense = response.json()
+    assert expense["category"] == "agua"
+    assert expense["category_icon"] == "💧"
+
+    # y el filtro por categoría también funciona con las inventadas
+    listado = client.get(
+        f"/groups/{group['id']}/expenses?category=agua", headers=headers
+    ).json()
+    assert [g["id"] for g in listado] == [expense["id"]]
+
+
+def test_editar_categoria_personalizada_y_volver_a_predefinida(client):
+    headers = register_and_login(client, "ana@example.com", "Ana")
+    group, owner, bea, carlos = make_standard_group(client, headers)
+
+    expense = client.post(
+        f"/groups/{group['id']}/expenses",
+        json={
+            "description": "Cuota gimnasio",
+            "amount": "45",
+            "paid_by": owner["id"],
+            "split_method": "equal",
+            "category": "gimnasio",
+            "category_icon": "🏋️",
+        },
+        headers=headers,
+    ).json()
+
+    # al volver a una predefinida, el emoji se limpia explícitamente
+    response = client.patch(
+        f"/groups/{group['id']}/expenses/{expense['id']}",
+        json={"category": "membresia", "category_icon": None},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    editado = response.json()
+    assert editado["category"] == "membresia"
+    assert editado["category_icon"] is None
+
+
+def test_categoria_invalida_rechazada(client):
+    headers = register_and_login(client, "ana@example.com", "Ana")
+    group, owner, bea, carlos = make_standard_group(client, headers)
+
+    base = {
+        "description": "Gasto raro",
+        "amount": "10",
+        "paid_by": owner["id"],
+        "split_method": "equal",
+    }
+    for extra in (
+        {"category": ""},
+        {"category": "   "},
+        {"category": "x" * 31},
+        {"category": "agua", "category_icon": "x" * 21},
+    ):
+        response = client.post(
+            f"/groups/{group['id']}/expenses", json={**base, **extra}, headers=headers
+        )
+        assert response.status_code == 422, extra
+
+
 def test_gasto_percentage_sin_splits_usa_defaults_del_grupo(client):
     headers = register_and_login(client, "ana@example.com", "Ana")
     group, owner, bea, carlos = make_standard_group(client, headers)

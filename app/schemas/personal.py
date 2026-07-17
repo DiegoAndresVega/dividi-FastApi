@@ -5,14 +5,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.expense import ExpenseCategory
-from app.schemas.expense import Money
+from app.models.expense import DEFAULT_CATEGORY
+from app.schemas.expense import CategoryIcon, CategoryName, Money
 
 
 class PersonalExpenseCreate(BaseModel):
     description: str = Field(min_length=1, max_length=500)
     amount: Money
-    category: ExpenseCategory = ExpenseCategory.otros
+    category: CategoryName = DEFAULT_CATEGORY
+    category_icon: Optional[CategoryIcon] = None
     # opcional: apuntar un gasto de otro día (los gastos hormiga se apuntan tarde)
     created_at: Optional[datetime] = None
 
@@ -20,7 +21,9 @@ class PersonalExpenseCreate(BaseModel):
 class PersonalExpenseUpdate(BaseModel):
     description: Optional[str] = Field(default=None, min_length=1, max_length=500)
     amount: Optional[Money] = None
-    category: Optional[ExpenseCategory] = None
+    category: Optional[CategoryName] = None
+    # None con el campo presente = quitar el emoji (el router mira model_fields_set)
+    category_icon: Optional[CategoryIcon] = None
 
 
 class PersonalExpenseOut(BaseModel):
@@ -29,12 +32,13 @@ class PersonalExpenseOut(BaseModel):
     id: UUID
     description: str
     amount: Decimal
-    category: ExpenseCategory
+    category: str
+    category_icon: Optional[str]
     created_at: datetime
 
 
 class BudgetItem(BaseModel):
-    category: ExpenseCategory
+    category: CategoryName
     limit_amount: Money
 
 
@@ -51,7 +55,7 @@ class FinancesOut(BaseModel):
 
 
 class CategorySummary(BaseModel):
-    category: ExpenseCategory
+    category: str
     personal: Decimal
     groups_share: Decimal
     total: Decimal

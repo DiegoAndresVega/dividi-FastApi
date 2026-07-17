@@ -1,13 +1,18 @@
-import enum
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.expense import ExpenseCategory, SplitMethod
+from app.models.expense import (
+    CATEGORY_ICON_MAX_LENGTH,
+    CATEGORY_MAX_LENGTH,
+    DEFAULT_CATEGORY,
+    SplitMethod,
+)
 
 
 class RecurringExpense(Base):
@@ -27,9 +32,11 @@ class RecurringExpense(Base):
     )
     description: Mapped[str] = mapped_column(String(500))
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
-    category: Mapped[ExpenseCategory] = mapped_column(
-        Enum(ExpenseCategory, native_enum=False, length=20),
-        default=ExpenseCategory.otros,
+    category: Mapped[str] = mapped_column(
+        String(CATEGORY_MAX_LENGTH), default=DEFAULT_CATEGORY
+    )
+    category_icon: Mapped[Optional[str]] = mapped_column(
+        String(CATEGORY_ICON_MAX_LENGTH), nullable=True
     )
     paid_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("group_members.id"))
     # solo equal/percentage: los métodos con splits a medida no tienen

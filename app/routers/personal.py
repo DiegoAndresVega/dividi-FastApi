@@ -9,12 +9,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import (
-    ExpenseCategory,
     PersonalExpense,
     User,
     UserBudget,
     UserFinance,
 )
+from app.models.expense import CATEGORY_MAX_LENGTH
 from app.schemas.personal import (
     FinancesOut,
     FinancesUpdate,
@@ -53,6 +53,7 @@ def create_personal_expense(
         description=payload.description,
         amount=payload.amount,
         category=payload.category,
+        category_icon=payload.category_icon,
     )
     if payload.created_at is not None:
         expense.created_at = payload.created_at
@@ -64,7 +65,7 @@ def create_personal_expense(
 
 @router.get("/expenses", response_model=list[PersonalExpenseOut])
 def list_personal_expenses(
-    category: Optional[ExpenseCategory] = Query(default=None),
+    category: Optional[str] = Query(default=None, max_length=CATEGORY_MAX_LENGTH),
     date_from: Optional[datetime] = Query(default=None),
     date_to: Optional[datetime] = Query(default=None),
     db: Session = Depends(get_db),
@@ -72,7 +73,8 @@ def list_personal_expenses(
 ):
     stmt = select(PersonalExpense).where(PersonalExpense.user_id == user.id)
     if category is not None:
-        stmt = stmt.where(PersonalExpense.category == category)
+        # misma normalización que al guardar: «Agua» encuentra «agua»
+        stmt = stmt.where(PersonalExpense.category == category.strip().lower())
     if date_from is not None:
         stmt = stmt.where(PersonalExpense.created_at >= date_from)
     if date_to is not None:
@@ -88,7 +90,10 @@ def update_personal_expense(
     user: User = Depends(get_current_user),
 ):
     expense = _get_personal_or_404(db, expense_id, user)
-    for field, value in payload.model_dump(exclude_unset=True, exclude_none=True).items():
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        # el emoji admite null explícito (limpiarlo); el resto de campos no
+        if value is None and field != "category_icon":
+            continue
         setattr(expense, field, value)
     db.commit()
     db.refresh(expense)

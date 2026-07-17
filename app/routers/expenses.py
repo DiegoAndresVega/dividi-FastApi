@@ -10,7 +10,6 @@ from app.database import get_db
 from app.dependencies import get_current_user, get_group_or_404, require_membership
 from app.models import (
     Expense,
-    ExpenseCategory,
     ExpenseSplit,
     Group,
     GroupMember,
@@ -18,6 +17,7 @@ from app.models import (
     SplitMethod,
     User,
 )
+from app.models.expense import CATEGORY_MAX_LENGTH
 from app.schemas.expense import ExpenseCreate, ExpenseOut, ExpenseUpdate, SplitInput
 from app.services import recurring_service
 from app.services.split_calculator import (
@@ -137,6 +137,7 @@ def create_expense(
         amount=payload.amount,
         currency=currency,
         category=payload.category,
+        category_icon=payload.category_icon,
         paid_by_id=payload.paid_by,
         split_method=payload.split_method,
         created_by_id=user.id,
@@ -151,7 +152,7 @@ def create_expense(
 @router.get("", response_model=list[ExpenseOut])
 def list_expenses(
     group_id: uuid.UUID,
-    category: Optional[ExpenseCategory] = Query(default=None),
+    category: Optional[str] = Query(default=None, max_length=CATEGORY_MAX_LENGTH),
     date_from: Optional[datetime] = Query(default=None),
     date_to: Optional[datetime] = Query(default=None),
     db: Session = Depends(get_db),
@@ -164,7 +165,8 @@ def list_expenses(
 
     stmt = select(Expense).where(Expense.group_id == group.id)
     if category is not None:
-        stmt = stmt.where(Expense.category == category)
+        # misma normalización que al guardar: «Agua» encuentra «agua»
+        stmt = stmt.where(Expense.category == category.strip().lower())
     if date_from is not None:
         stmt = stmt.where(Expense.created_at >= date_from)
     if date_to is not None:
@@ -201,6 +203,10 @@ def update_expense(
         expense.description = payload.description
     if payload.category is not None:
         expense.category = payload.category
+    # el emoji admite null explícito: al volver a una categoría predefinida
+    # el cliente manda category_icon=null para limpiarlo
+    if "category_icon" in payload.model_fields_set:
+        expense.category_icon = payload.category_icon
     if payload.currency is not None:
         expense.currency = _check_currency(payload.currency, group)
     if payload.paid_by is not None:

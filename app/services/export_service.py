@@ -41,7 +41,7 @@ def build_csv(group: Group, balances: dict, settlements: list) -> str:
             [
                 expense.created_at.date().isoformat(),
                 expense.description,
-                expense.category.value,
+                expense.category,
                 names.get(expense.paid_by_id, "—"),
                 _dec(expense.amount),
             ]

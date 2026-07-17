@@ -1,6 +1,6 @@
 from app.models.user import User
 from app.models.group import Group, GroupMember, MemberRole
-from app.models.expense import Expense, ExpenseSplit, ExpenseCategory, SplitMethod
+from app.models.expense import Expense, ExpenseSplit, SplitMethod
 from app.models.payment import Payment
 from app.models.invitation import Invitation
 from app.models.savings import SavingsEntry, SavingsEntryKind, SavingsPlan
@@ -21,7 +21,6 @@ __all__ = [
     "MemberRole",
     "Expense",
     "ExpenseSplit",
-    "ExpenseCategory",
     "SplitMethod",
     "Payment",
     "Invitation",

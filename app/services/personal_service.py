@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     Expense,
-    ExpenseCategory,
     ExpenseSplit,
     GroupMember,
     PersonalExpense,
@@ -40,7 +39,7 @@ def monthly_summary(db: Session, user: User, period: str) -> dict:
     start, end = period_window(period)
     zero = Decimal("0")
 
-    personal_by_cat: dict[ExpenseCategory, Decimal] = {}
+    personal_by_cat: dict[str, Decimal] = {}
     for expense in db.scalars(
         select(PersonalExpense).where(
             PersonalExpense.user_id == user.id,
@@ -52,7 +51,7 @@ def monthly_summary(db: Session, user: User, period: str) -> dict:
             personal_by_cat.get(expense.category, zero) + expense.amount
         )
 
-    share_by_cat: dict[ExpenseCategory, Decimal] = {}
+    share_by_cat: dict[str, Decimal] = {}
     filas = db.execute(
         select(Expense.category, ExpenseSplit.computed_amount)
         .join(ExpenseSplit, ExpenseSplit.expense_id == Expense.id)

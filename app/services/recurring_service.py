@@ -99,6 +99,7 @@ def materialize_due(db: Session, group: Group, now: datetime | None = None) -> i
                 amount=rule.amount,
                 currency=group.default_currency,
                 category=rule.category,
+                category_icon=rule.category_icon,
                 paid_by_id=rule.paid_by_id,
                 split_method=rule.split_method,
                 created_by_id=rule.created_by_id,

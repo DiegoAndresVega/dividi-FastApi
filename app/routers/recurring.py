@@ -59,6 +59,7 @@ def create_rule(
         description=payload.description,
         amount=payload.amount,
         category=payload.category,
+        category_icon=payload.category_icon,
         paid_by_id=payload.paid_by,
         split_method=SplitMethod(payload.split_method),
         created_by_id=user.id,
@@ -100,7 +101,10 @@ def update_rule(
     rule = _get_rule_or_404(db, group.id, rule_id)
     _can_modify(membership, rule, user)
 
-    for field, value in payload.model_dump(exclude_unset=True, exclude_none=True).items():
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        # el emoji admite null explícito (limpiarlo); el resto de campos no
+        if value is None and field != "category_icon":
+            continue
         setattr(rule, field, value)
     db.commit()
     db.refresh(rule)

@@ -11,8 +11,10 @@ def current_period() -> str:
 
 
 def create_personal(client, headers, description="Gimnasio", amount="39.90",
-                    category="ocio", created_at=None):
+                    category="ocio", category_icon=None, created_at=None):
     payload = {"description": description, "amount": amount, "category": category}
+    if category_icon is not None:
+        payload["category_icon"] = category_icon
     if created_at is not None:
         payload["created_at"] = created_at
     response = client.post("/me/expenses", json=payload, headers=headers)
@@ -98,10 +100,29 @@ def test_personal_expense_validation(client):
     for payload in [
         {"description": "", "amount": "10"},
         {"description": "X", "amount": "0"},
-        {"description": "X", "amount": "10", "category": "inventada"},
+        {"description": "X", "amount": "10", "category": "   "},
+        {"description": "X", "amount": "10", "category": "x" * 31},
     ]:
         response = client.post("/me/expenses", json=payload, headers=headers)
         assert response.status_code == 422, payload
+
+
+def test_personal_expense_categoria_personalizada(client):
+    headers = register_and_login(client, "ana@example.com")
+
+    gasto = create_personal(
+        client, headers,
+        description="Recibo del agua",
+        category="Agua",
+        category_icon="💧",
+    )
+    assert gasto["category"] == "agua"
+    assert gasto["category_icon"] == "💧"
+
+    # el resumen mensual también agrupa por la categoría inventada
+    resumen = client.get("/me/summary", headers=headers).json()
+    agua = next(c for c in resumen["by_category"] if c["category"] == "agua")
+    assert as_decimal(agua["personal"]) == as_decimal("39.90")
 
 
 def test_personal_requires_auth(client):

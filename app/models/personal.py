@@ -3,11 +3,15 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, UniqueConstraint, Uuid
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.expense import ExpenseCategory
+from app.models.expense import (
+    CATEGORY_ICON_MAX_LENGTH,
+    CATEGORY_MAX_LENGTH,
+    DEFAULT_CATEGORY,
+)
 
 
 class PersonalExpense(Base):
@@ -22,9 +26,11 @@ class PersonalExpense(Base):
     )
     description: Mapped[str] = mapped_column(String(500))
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
-    category: Mapped[ExpenseCategory] = mapped_column(
-        Enum(ExpenseCategory, native_enum=False, length=20),
-        default=ExpenseCategory.otros,
+    category: Mapped[str] = mapped_column(
+        String(CATEGORY_MAX_LENGTH), default=DEFAULT_CATEGORY
+    )
+    category_icon: Mapped[Optional[str]] = mapped_column(
+        String(CATEGORY_ICON_MAX_LENGTH), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -58,9 +64,7 @@ class UserBudget(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    category: Mapped[ExpenseCategory] = mapped_column(
-        Enum(ExpenseCategory, native_enum=False, length=20)
-    )
+    category: Mapped[str] = mapped_column(String(CATEGORY_MAX_LENGTH))
     limit_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
 
     user = relationship("User")
