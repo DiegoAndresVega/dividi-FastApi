@@ -19,10 +19,21 @@ from app.services.split_calculator import (
 )
 
 
+def current_period(now: datetime | None = None) -> str:
+    return (now or datetime.now(timezone.utc)).strftime("%Y-%m")
+
+
 def shift_period(period: str, months: int) -> str:
     year, month = map(int, period.split("-"))
     total = year * 12 + (month - 1) + months
     return f"{total // 12:04d}-{total % 12 + 1:02d}"
+
+
+def months_between(start: str, end: str) -> int:
+    """Meses de `start` a `end` (positivo si start es anterior a end)."""
+    sy, sm = map(int, start.split("-"))
+    ey, em = map(int, end.split("-"))
+    return (ey * 12 + em) - (sy * 12 + sm)
 
 
 def due_date(period: str, day_of_month: int) -> datetime:
@@ -60,9 +71,17 @@ def materialize_due(db: Session, group: Group, now: datetime | None = None) -> i
         )
     ).all()
 
+    from app.config import settings
+
     created = 0
     for rule in rules:
+        # tope de meses por regla y por llamada: una regla con fecha de inicio
+        # muy antigua no puede crear cientos de gastos de golpe (anti-DoS)
+        catchup = 0
         while due_date(rule.next_period, rule.day_of_month) <= now:
+            if catchup >= settings.recurring_max_catchup_months:
+                break
+            catchup += 1
             if not any(m.id == rule.paid_by_id for m in group.members):
                 # el pagador ya no está en el grupo: la regla se pausa en vez
                 # de romper la consulta; un admin puede reactivarla editándola

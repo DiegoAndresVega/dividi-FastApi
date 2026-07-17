@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, get_group_or_404, require_membership
 from app.models import MemberRole, RecurringExpense, SplitMethod, User
@@ -40,6 +41,18 @@ def create_rule(
         raise HTTPException(
             status_code=400, detail="'paid_by' debe ser un miembro del grupo"
         )
+    # no se puede fechar una regla más atrás de lo que un solo request puede
+    # recuperar de golpe: bloquea fechas absurdas (p.ej. "2000-01") que
+    # inflarían la base de datos (anti-DoS), pero permite un backfill razonable
+    if payload.start_period is not None:
+        meses_atras = recurring_service.months_between(
+            payload.start_period, recurring_service.current_period()
+        )
+        if meses_atras > settings.recurring_max_catchup_months:
+            raise HTTPException(
+                status_code=400,
+                detail="La fecha de inicio está demasiado lejos en el pasado",
+            )
 
     rule = RecurringExpense(
         group_id=group.id,

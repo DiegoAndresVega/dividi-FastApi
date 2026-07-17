@@ -13,6 +13,9 @@ from app.main import app
 # Por defecto los tests corren con registro abierto; los tests de invitaciones
 # reactivan require_invite puntualmente con monkeypatch.
 settings.require_invite = False
+# El rate limiting se desactiva por defecto en los tests (los de seguridad lo
+# reactivan puntualmente). Debe fijarse ANTES de importar la app.
+settings.rate_limit_enabled = False
 
 # SQLite en memoria para tests: rápido y sin dependencias externas.
 # StaticPool + check_same_thread=False para compartir la misma conexión

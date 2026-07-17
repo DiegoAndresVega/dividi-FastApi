@@ -52,13 +52,17 @@ async def upload_receipt(
         raise HTTPException(
             status_code=415, detail="El tique debe ser una imagen (JPG, PNG o WebP)"
         )
-    data = await file.read()
+    # lee por trozos y aborta en cuanto se pasa del límite: nunca cargamos
+    # en memoria un archivo mayor de lo permitido, venga como venga
+    data = b""
+    while chunk := await file.read(64 * 1024):
+        data += chunk
+        if len(data) > MAX_RECEIPT_BYTES:
+            raise HTTPException(
+                status_code=413, detail="La imagen no puede superar los 5 MB"
+            )
     if not data:
         raise HTTPException(status_code=400, detail="El archivo llegó vacío")
-    if len(data) > MAX_RECEIPT_BYTES:
-        raise HTTPException(
-            status_code=413, detail="La imagen no puede superar los 5 MB"
-        )
 
     anterior = _find_file(expense_id)
     if anterior is not None:

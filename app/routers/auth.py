@@ -1,7 +1,7 @@
 import uuid
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import GroupMember, User
+from app.rate_limit import auth_limit, limiter
 from app.schemas.user import RefreshRequest, Token, UserCreate, UserOut
 from app.security import (
     create_access_token,
@@ -23,7 +24,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(payload: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit(auth_limit)
+def register(request: Request, payload: UserCreate, db: Session = Depends(get_db)):
     email = payload.email.lower()
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="Ya existe un usuario con ese email")
@@ -63,7 +65,12 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit(auth_limit)
+def login(
+    request: Request,
+    form: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
     user = db.scalar(select(User).where(User.email == form.username.lower()))
     if user is None or not verify_password(form.password, user.hashed_password):
         raise HTTPException(
@@ -78,7 +85,8 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 
 
 @router.post("/refresh", response_model=Token)
-def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
+@limiter.limit(auth_limit)
+def refresh(request: Request, payload: RefreshRequest, db: Session = Depends(get_db)):
     invalid = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token inválido"
     )

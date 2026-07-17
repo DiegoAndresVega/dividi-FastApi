@@ -21,5 +21,20 @@ class Settings(BaseSettings):
     # en producción para sobrevivir a los rebuilds del contenedor).
     receipts_dir: str = "receipts"
 
+    # --- Endurecimiento (anti-abuso / anti-DoS) ---
+    # Límite de peticiones por IP. Se desactiva en los tests.
+    rate_limit_enabled: bool = True
+    # Endpoints normales: generoso, solo frena martilleo automatizado.
+    default_rate_limit: str = "240/minute"
+    # Login/registro: estrictos, frenan fuerza bruta (bcrypt es caro a propósito).
+    auth_rate_limit: str = "10/minute"
+    # Tamaño máximo de cuerpo de una petición (bytes). Cubre el tique de 5 MB
+    # con holgura para el envoltorio multipart; rechaza cuerpos enormes antes
+    # de leerlos en memoria.
+    max_request_bytes: int = 8 * 1024 * 1024
+    # Un gasto recurrente no puede materializar más de estos meses de golpe:
+    # frena que una regla con fecha de inicio muy antigua cree cientos de gastos.
+    recurring_max_catchup_months: int = 12
+
 
 settings = Settings()
