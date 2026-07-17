@@ -6,6 +6,13 @@ from app.models.invitation import Invitation
 from app.models.savings import SavingsEntry, SavingsEntryKind, SavingsPlan
 from app.models.personal import PersonalExpense, UserBudget, UserFinance
 from app.models.recurring import RecurringExpense
+from app.models.friendship import Friendship, FriendshipStatus
+from app.models.notification import (
+    NOTIF_ADDED_TO_GROUP,
+    NOTIF_FRIEND_ACCEPTED,
+    NOTIF_FRIEND_REQUEST,
+    Notification,
+)
 
 __all__ = [
     "User",
@@ -25,4 +32,10 @@ __all__ = [
     "UserFinance",
     "UserBudget",
     "RecurringExpense",
+    "Friendship",
+    "FriendshipStatus",
+    "Notification",
+    "NOTIF_FRIEND_REQUEST",
+    "NOTIF_FRIEND_ACCEPTED",
+    "NOTIF_ADDED_TO_GROUP",
 ]

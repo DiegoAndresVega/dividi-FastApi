@@ -11,9 +11,23 @@ Percentage = Annotated[Decimal, Field(ge=0, le=100, decimal_places=2)]
 CurrencyCode = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 
 
+class GroupMemberInit(BaseModel):
+    """Invitado que se crea junto con el grupo (sin cuenta, solo un nombre;
+    email opcional para vincularlo si algún día se registra)."""
+
+    display_name: str = Field(min_length=1, max_length=255)
+    email: Optional[EmailStr] = None
+    default_percentage: Percentage = Decimal("0")
+
+
 class GroupCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     default_currency: CurrencyCode = "EUR"
+    # peso del creador en el hogar; si se añaden invitados y no se indica, se
+    # calcula como el resto hasta 100
+    owner_percentage: Optional[Percentage] = None
+    # invitados a crear junto con el grupo (además del creador)
+    members: list[GroupMemberInit] = Field(default_factory=list)
 
 
 class GroupUpdate(BaseModel):
@@ -53,14 +67,16 @@ class MemberAdd(BaseModel):
     """
 
     email: Optional[EmailStr] = None
+    # id de un amigo (usuario con cuenta) para añadirlo enlazado a su cuenta
+    user_id: Optional[UUID] = None
     display_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     default_percentage: Percentage = Decimal("0")
     rebalance: Optional[dict[UUID, Percentage]] = None
 
     @model_validator(mode="after")
-    def _email_or_display_name(self):
-        if not self.email and not self.display_name:
-            raise ValueError("Debes indicar 'email' o 'display_name'")
+    def _identifica_al_miembro(self):
+        if not self.email and not self.display_name and not self.user_id:
+            raise ValueError("Debes indicar 'email', 'display_name' o 'user_id'")
         return self
 
 

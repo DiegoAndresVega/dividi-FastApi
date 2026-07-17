@@ -9,9 +9,11 @@ from app.routers import (
     auth,
     expenses,
     export,
+    friends,
     groups,
     invitations,
     me,
+    notifications,
     payments,
     personal,
     receipts,
@@ -49,6 +51,8 @@ app.include_router(receipts.router)
 app.include_router(export.router)
 app.include_router(payments.router)
 app.include_router(savings.router)
+app.include_router(friends.router)
+app.include_router(notifications.router)
 
 
 @app.get("/health", tags=["health"])

@@ -14,6 +14,7 @@ from app.dependencies import (
     require_membership,
 )
 from app.models import (
+    NOTIF_ADDED_TO_GROUP,
     Expense,
     ExpenseSplit,
     Group,
@@ -34,7 +35,7 @@ from app.schemas.group import (
     SettlementOut,
 )
 from app.services.balance_service import compute_group_balances
-from app.services import recurring_service
+from app.services import friend_service, notification_service, recurring_service
 from app.services.debt_simplifier import simplify_debts
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -72,22 +73,82 @@ def _get_member_or_404(group: Group, member_id: uuid.UUID) -> GroupMember:
     return member
 
 
+def _notify_added_to_group(
+    db: Session, target_user_id: uuid.UUID, actor: User, group: Group
+) -> None:
+    notification_service.notify(
+        db,
+        target_user_id,
+        type=NOTIF_ADDED_TO_GROUP,
+        title="Te añadieron a un grupo",
+        body=f"{actor.name} te añadió al grupo «{group.name}»",
+        data={"group_id": str(group.id), "group_name": group.name},
+    )
+
+
 @router.post("", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
 def create_group(
     payload: GroupCreate,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    group = Group(name=payload.name, owner_id=user.id, default_currency=payload.default_currency)
+    group = Group(
+        name=payload.name, owner_id=user.id, default_currency=payload.default_currency
+    )
+
+    # peso del creador: 100 si va solo; si añade invitados, el que indique o el
+    # resto hasta 100
+    guests = payload.members
+    if guests:
+        guests_sum = sum((g.default_percentage for g in guests), Decimal("0"))
+        if payload.owner_percentage is not None:
+            owner_pct = payload.owner_percentage
+            if owner_pct + guests_sum != HUNDRED:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Los porcentajes deben sumar 100 (suma actual: {owner_pct + guests_sum})",
+                )
+        else:
+            owner_pct = HUNDRED - guests_sum
+            if owner_pct < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Los porcentajes de los invitados no pueden pasar de 100",
+                )
+    else:
+        owner_pct = HUNDRED
+
     group.members.append(
         GroupMember(
             user_id=user.id,
             display_name=user.name,
-            default_percentage=HUNDRED,
+            default_percentage=owner_pct,
             role=MemberRole.admin,
         )
     )
+
+    users_to_notify: list[uuid.UUID] = []
+    for guest in guests:
+        email = guest.email.lower() if guest.email else None
+        linked_user = (
+            db.scalar(select(User).where(User.email == email)) if email else None
+        )
+        group.members.append(
+            GroupMember(
+                user_id=linked_user.id if linked_user else None,
+                invited_email=None if linked_user else email,
+                display_name=guest.display_name,
+                default_percentage=guest.default_percentage,
+                role=MemberRole.member,
+            )
+        )
+        if linked_user and linked_user.id != user.id:
+            users_to_notify.append(linked_user.id)
+
     db.add(group)
+    db.flush()  # asegura group.id antes de crear las notificaciones
+    for target_id in users_to_notify:
+        _notify_added_to_group(db, target_id, user, group)
     db.commit()
     db.refresh(group)
     return group
@@ -155,21 +216,37 @@ def add_member(
     require_admin(require_membership(group, user))
 
     linked_user = None
-    if payload.email:
-        email = payload.email.lower()
-        for member in group.members:
-            if member.invited_email == email or (member.user and member.user.email == email):
-                raise HTTPException(
-                    status_code=409, detail="Ya existe un miembro con ese email en el grupo"
-                )
+    email = payload.email.lower() if payload.email else None
+    if payload.user_id:
+        # añadir a un amigo por su cuenta: solo si de verdad es amigo tuyo
+        linked_user = db.get(User, payload.user_id)
+        if linked_user is None:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        if not friend_service.are_friends(db, user.id, linked_user.id):
+            raise HTTPException(
+                status_code=403,
+                detail="Solo puedes añadir por su cuenta a tus amigos",
+            )
+    elif email:
         linked_user = db.scalar(select(User).where(User.email == email))
 
+    # no duplicar a alguien que ya está en el grupo (por cuenta o por email)
+    for member in group.members:
+        if linked_user and member.user_id == linked_user.id:
+            raise HTTPException(
+                status_code=409, detail="Esa persona ya está en el grupo"
+            )
+        if email and member.invited_email == email:
+            raise HTTPException(
+                status_code=409, detail="Ya existe un miembro con ese email en el grupo"
+            )
+
     display_name = payload.display_name or (
-        linked_user.name if linked_user else payload.email.split("@")[0]
+        linked_user.name if linked_user else email.split("@")[0]
     )
     member = GroupMember(
         user_id=linked_user.id if linked_user else None,
-        invited_email=None if linked_user else (payload.email.lower() if payload.email else None),
+        invited_email=None if linked_user else email,
         display_name=display_name,
         default_percentage=payload.default_percentage,
         role=MemberRole.member,
@@ -177,6 +254,9 @@ def add_member(
     group.members.append(member)
     _apply_rebalance(group, payload.rebalance)
     _validate_group_percentages(group)
+
+    if linked_user and linked_user.id != user.id:
+        _notify_added_to_group(db, linked_user.id, user, group)
 
     db.commit()
     db.refresh(member)
