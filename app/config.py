@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     invite_default_expire_days: int | None = None
     # Base URL del frontend para construir el enlace de invitación (opcional).
     frontend_base_url: str | None = None
+    # Carpeta donde se guardan las fotos de los tiques (montada como volumen
+    # en producción para sobrevivir a los rebuilds del contenedor).
+    receipts_dir: str = "receipts"
 
 
 settings = Settings()

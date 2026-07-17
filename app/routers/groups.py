@@ -34,6 +34,7 @@ from app.schemas.group import (
     SettlementOut,
 )
 from app.services.balance_service import compute_group_balances
+from app.services import recurring_service
 from app.services.debt_simplifier import simplify_debts
 
 router = APIRouter(prefix="/groups", tags=["groups"])
@@ -264,6 +265,7 @@ def get_balances(
 ):
     group = get_group_or_404(db, group_id)
     require_membership(group, user)
+    recurring_service.materialize_due(db, group)
 
     balances = compute_group_balances(group)
     return [
@@ -280,6 +282,7 @@ def settle_up(
 ):
     group = get_group_or_404(db, group_id)
     require_membership(group, user)
+    recurring_service.materialize_due(db, group)
 
     balances = compute_group_balances(group)
     settlements = simplify_debts(balances)

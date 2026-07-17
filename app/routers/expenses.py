@@ -19,6 +19,7 @@ from app.models import (
     User,
 )
 from app.schemas.expense import ExpenseCreate, ExpenseOut, ExpenseUpdate, SplitInput
+from app.services import recurring_service
 from app.services.split_calculator import (
     SplitSpec,
     SplitValidationError,
@@ -158,6 +159,8 @@ def list_expenses(
 ):
     group = get_group_or_404(db, group_id)
     require_membership(group, user)
+    # materializa los gastos recurrentes vencidos antes de listar
+    recurring_service.materialize_due(db, group)
 
     stmt = select(Expense).where(Expense.group_id == group.id)
     if category is not None:
