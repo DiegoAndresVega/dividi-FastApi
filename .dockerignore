@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+!.env.example
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.vscode
+.claude
+Arquitectura.pdf
+render.yaml
