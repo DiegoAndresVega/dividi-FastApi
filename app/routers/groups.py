@@ -66,6 +66,33 @@ def _apply_rebalance(group: Group, rebalance: Optional[dict]) -> None:
         member.default_percentage = percentage
 
 
+def _resolve_linked_user(
+    db: Session,
+    actor: User,
+    user_id: Optional[uuid.UUID],
+    email: Optional[str],
+) -> Optional[User]:
+    """Cuenta a la que enlazar un miembro nuevo, o None si va sin cuenta.
+
+    Por `user_id` solo se permite enlazar a un amigo (si no, cualquiera podría
+    meter a cualquiera en su grupo); por email se enlaza si ya existe una
+    cuenta registrada con ese email.
+    """
+    if user_id:
+        linked_user = db.get(User, user_id)
+        if linked_user is None:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        if not friend_service.are_friends(db, actor.id, linked_user.id):
+            raise HTTPException(
+                status_code=403,
+                detail="Solo puedes añadir por su cuenta a tus amigos",
+            )
+        return linked_user
+    if email:
+        return db.scalar(select(User).where(User.email == email))
+    return None
+
+
 def _get_member_or_404(group: Group, member_id: uuid.UUID) -> GroupMember:
     member = next((m for m in group.members if m.id == member_id), None)
     if member is None:
@@ -128,11 +155,16 @@ def create_group(
     )
 
     users_to_notify: list[uuid.UUID] = []
+    linked_user_ids: set[uuid.UUID] = {user.id}
     for guest in guests:
         email = guest.email.lower() if guest.email else None
-        linked_user = (
-            db.scalar(select(User).where(User.email == email)) if email else None
-        )
+        linked_user = _resolve_linked_user(db, user, guest.user_id, email)
+        if linked_user:
+            if linked_user.id in linked_user_ids:
+                raise HTTPException(
+                    status_code=409, detail="Esa persona ya está en el grupo"
+                )
+            linked_user_ids.add(linked_user.id)
         group.members.append(
             GroupMember(
                 user_id=linked_user.id if linked_user else None,
@@ -215,20 +247,8 @@ def add_member(
     group = get_group_or_404(db, group_id)
     require_admin(require_membership(group, user))
 
-    linked_user = None
     email = payload.email.lower() if payload.email else None
-    if payload.user_id:
-        # añadir a un amigo por su cuenta: solo si de verdad es amigo tuyo
-        linked_user = db.get(User, payload.user_id)
-        if linked_user is None:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-        if not friend_service.are_friends(db, user.id, linked_user.id):
-            raise HTTPException(
-                status_code=403,
-                detail="Solo puedes añadir por su cuenta a tus amigos",
-            )
-    elif email:
-        linked_user = db.scalar(select(User).where(User.email == email))
+    linked_user = _resolve_linked_user(db, user, payload.user_id, email)
 
     # no duplicar a alguien que ya está en el grupo (por cuenta o por email)
     for member in group.members:

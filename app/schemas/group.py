@@ -12,11 +12,17 @@ CurrencyCode = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 
 
 class GroupMemberInit(BaseModel):
-    """Invitado que se crea junto con el grupo (sin cuenta, solo un nombre;
-    email opcional para vincularlo si algún día se registra)."""
+    """Participante que se crea junto con el grupo.
+
+    Puede ser un amigo con cuenta (`user_id`) o un participante personalizado
+    sin cuenta (solo un nombre; email opcional para vincularlo si algún día se
+    registra).
+    """
 
     display_name: str = Field(min_length=1, max_length=255)
     email: Optional[EmailStr] = None
+    # id de un amigo (usuario con cuenta) para añadirlo enlazado a su cuenta
+    user_id: Optional[UUID] = None
     default_percentage: Percentage = Decimal("0")
 
 

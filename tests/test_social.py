@@ -218,3 +218,50 @@ def test_create_group_guest_with_registered_email_is_linked_and_notified(client)
     assert r.status_code == 201, r.text
     beto_member = next(m for m in r.json()["members"] if m["display_name"] == "Beto")
     assert beto_member["user_id"] is not None
+
+
+def test_crear_grupo_con_un_amigo_por_su_cuenta(client):
+    """Al crear el grupo se puede meter ya a un amigo, sin pasos extra."""
+    ana = _headers(client, "ana@example.com", "Ana")
+    beto = _headers(client, "beto@example.com", "Beto")
+    _befriend(client, ana, beto, "beto@example.com")
+    beto_id = client.get("/friends", headers=ana).json()[0]["user_id"]
+
+    r = client.post(
+        "/groups",
+        json={
+            "name": "Viaje",
+            "owner_percentage": "50",
+            "members": [
+                {"user_id": beto_id, "display_name": "Beto", "default_percentage": "50"}
+            ],
+        },
+        headers=ana,
+    )
+    assert r.status_code == 201, r.text
+    beto_member = next(m for m in r.json()["members"] if m["display_name"] == "Beto")
+    assert beto_member["user_id"] == beto_id
+
+    # Beto ve el grupo entre los suyos y le llega la novedad
+    assert any(g["id"] == r.json()["id"] for g in client.get("/groups", headers=beto).json())
+    tipos = [n["type"] for n in client.get("/notifications", headers=beto).json()]
+    assert "added_to_group" in tipos
+
+
+def test_crear_grupo_con_un_no_amigo_por_su_cuenta_falla(client):
+    ana = _headers(client, "ana@example.com", "Ana")
+    beto = _headers(client, "beto@example.com", "Beto")
+    beto_id = client.get("/me", headers=beto).json()["id"]
+
+    r = client.post(
+        "/groups",
+        json={
+            "name": "Viaje",
+            "owner_percentage": "50",
+            "members": [
+                {"user_id": beto_id, "display_name": "Beto", "default_percentage": "50"}
+            ],
+        },
+        headers=ana,
+    )
+    assert r.status_code == 403, r.text

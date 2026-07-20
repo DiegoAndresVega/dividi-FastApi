@@ -71,6 +71,32 @@ def test_borrar_grupo_solo_admin(client):
     assert client.get(f"/groups/{group['id']}", headers=ana).status_code == 404
 
 
+def test_borrar_grupo_con_gastos_y_pagos_arrastra_todo(client):
+    """Un grupo creado por error o ya saldado se borra con toda su actividad."""
+    headers = register_and_login(client, "ana@example.com", "Ana")
+    group, owner, bea, carlos = make_standard_group(client, headers)
+
+    client.post(
+        f"/groups/{group['id']}/expenses",
+        json={
+            "description": "Cena",
+            "amount": "30",
+            "paid_by": owner["id"],
+            "split_method": "equal",
+        },
+        headers=headers,
+    )
+    client.post(
+        f"/groups/{group['id']}/payments",
+        json={"from_member_id": bea["id"], "to_member_id": owner["id"], "amount": "10"},
+        headers=headers,
+    )
+
+    assert client.delete(f"/groups/{group['id']}", headers=headers).status_code == 204
+    assert client.get(f"/groups/{group['id']}", headers=headers).status_code == 404
+    assert group["id"] not in [g["id"] for g in client.get("/groups", headers=headers).json()]
+
+
 def test_añadir_miembro_sin_rebalance_que_rompe_el_100_falla(client):
     headers = register_and_login(client, "ana@example.com", "Ana")
     group = create_group(client, headers)

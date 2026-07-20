@@ -47,6 +47,31 @@ def create_payment(
     return payment
 
 
+@router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_payment(
+    group_id: uuid.UUID,
+    payment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Des-salda una cuenta: borra el pago y el balance vuelve a como estaba.
+
+    Los balances se recalculan siempre desde los gastos y los pagos, así que
+    basta con eliminar el pago para deshacer el saldado.
+    """
+    group = get_group_or_404(db, group_id)
+    require_membership(group, user)
+
+    payment = db.scalar(
+        select(Payment).where(Payment.id == payment_id, Payment.group_id == group.id)
+    )
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Pago no encontrado en el grupo")
+
+    db.delete(payment)
+    db.commit()
+
+
 @router.get("", response_model=list[PaymentOut])
 def list_payments(
     group_id: uuid.UUID,
