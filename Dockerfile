@@ -13,6 +13,7 @@ EXPOSE 8000
 # que una avalancha de conexiones no agote los recursos del proceso.
 # --proxy-headers con --forwarded-allow-ips acotado a la red Docker del proxy
 # (Caddy, 172.28.0.0/16): solo se confía en el X-Forwarded-For que pone Caddy,
-# así el rate limiting por IP ve la IP real del cliente y no se puede falsear
-# desde el puerto 8000 publicado.
+# así el rate limiting por IP ve la IP real del cliente. Se acota a la subred
+# en vez de "*" para que nadie pueda falsear la IP si algún día se vuelve a
+# exponer el puerto directamente.
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --limit-concurrency 100 --timeout-keep-alive 5 --proxy-headers --forwarded-allow-ips=172.28.0.0/16"]
