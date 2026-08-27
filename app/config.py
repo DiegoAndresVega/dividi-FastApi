@@ -8,7 +8,10 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-key-cambiar-en-produccion"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
-    refresh_token_expire_days: int = 7
+    # Sesión larga al estilo de las apps de uso diario: el refresh token dura
+    # un año y se renueva en cada uso (rotación en /auth/refresh), así que
+    # quien abre la app de vez en cuando no vuelve a ver la pantalla de login.
+    refresh_token_expire_days: int = 365
 
     # Registro invite-only: exige un código de invitación válido para registrarse.
     # El primer usuario del sistema (fundador) queda exento del requisito.

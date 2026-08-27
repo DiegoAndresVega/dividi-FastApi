@@ -50,6 +50,17 @@ def client():
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def db_session():
+    """Sesión directa a la base de los tests, para el código que no pasa por
+    la API (scripts de mantenimiento)."""
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 def as_decimal(value) -> Decimal:
     """Normaliza un valor numérico de la respuesta JSON a Decimal."""
     return Decimal(str(value))

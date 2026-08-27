@@ -1,3 +1,4 @@
+from app.security import decode_token
 from tests.conftest import add_member, create_group, register_and_login
 
 
@@ -65,6 +66,30 @@ def test_refresh_devuelve_tokens_nuevos(client):
     response = client.post("/auth/refresh", json={"refresh_token": login["refresh_token"]})
     assert response.status_code == 200
     assert response.json()["access_token"]
+
+
+def test_refresh_rota_el_token_y_alarga_la_sesion(client):
+    """La sesión es deslizante: cada refresh entrega un refresh token nuevo
+    con un año por delante, así que solo caduca tras un año sin abrir la app."""
+    # Arrange
+    client.post(
+        "/auth/register",
+        json={"email": "ana@example.com", "password": "password123", "name": "Ana"},
+    )
+    login = client.post(
+        "/auth/login", data={"username": "ana@example.com", "password": "password123"}
+    ).json()
+
+    # Act
+    renovado = client.post(
+        "/auth/refresh", json={"refresh_token": login["refresh_token"]}
+    ).json()
+
+    # Assert
+    datos = decode_token(renovado["refresh_token"])
+    assert datos["type"] == "refresh"
+    dias_de_sesion = (datos["exp"] - datos["iat"]) / 86400
+    assert dias_de_sesion >= 365
 
 
 def test_refresh_con_access_token_devuelve_401(client):
