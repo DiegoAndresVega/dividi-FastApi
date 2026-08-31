@@ -207,6 +207,18 @@ alembic/                  # migraciones
 tests/                    # 86 tests: unitarios + integración end-to-end
 ```
 
+## Copias de seguridad
+
+Copia diaria automática de la base de datos y de las fotos de tiques, cifrada con
+[`age`](https://github.com/FiloSottile/age) y con retención 7 diarias / 4 semanales / 6 mensuales.
+El servidor solo tiene la clave pública: puede crear copias, no leerlas.
+
+Cada copia guarda además un inventario (conteo exacto de filas por tabla y SHA-256 de cada
+tique) que permite verificar una restauración fila a fila y hash a hash.
+`scripts/restaurar-prueba.sh` levanta un PostgreSQL vacío en Docker, restaura dentro y compara.
+
+Procedimiento completo y registro de pruebas: **[`docs/restauracion.md`](docs/restauracion.md)**.
+
 ## Roadmap
 
 - Exportación PDF/CSV del resumen de grupo
