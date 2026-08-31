@@ -1,16 +1,8 @@
 """Tests de exportación CSV (M9) y foto del tique (M8)."""
 
-import pytest
-
-from app.config import settings
 from tests.conftest import make_standard_group, register_and_login
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"0" * 64
-
-
-@pytest.fixture(autouse=True)
-def _receipts_en_tmp(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "receipts_dir", str(tmp_path / "receipts"))
 
 
 def _grupo_con_gasto(client, headers):

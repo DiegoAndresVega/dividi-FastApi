@@ -36,6 +36,17 @@ TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=Fals
 
 
 @pytest.fixture(autouse=True)
+def _receipts_en_tmp(tmp_path, monkeypatch):
+    """Las fotos de tiques van a un directorio temporal.
+
+    Por defecto `receipts_dir` es una ruta relativa, así que sin esto los tests
+    que suben un tique crean un directorio `receipts/` dentro del repositorio y
+    una imagen de prueba puede acabar commiteada por accidente.
+    """
+    monkeypatch.setattr(settings, "receipts_dir", str(tmp_path / "receipts"))
+
+
+@pytest.fixture(autouse=True)
 def _fresh_db():
     Base.metadata.create_all(engine)
     yield
