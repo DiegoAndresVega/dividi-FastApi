@@ -5,8 +5,10 @@ services:
       POSTGRES_USER: gastos
       POSTGRES_PASSWORD: gastos
       POSTGRES_DB: gastos
+    # Atado a localhost: sin el 127.0.0.1 delante, Docker abre el puerto en
+    # todas las interfaces y escribe reglas de iptables que se saltan ufw.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -24,7 +26,7 @@ services:
       DATABASE_URL: postgresql+psycopg2://gastos:gastos@db:5432/gastos
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-cambiar-en-produccion}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
 volumes:
   pgdata:
