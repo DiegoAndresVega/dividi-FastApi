@@ -1,3 +1,4 @@
+import os
 from decimal import Decimal
 
 import pytest
@@ -6,9 +7,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.config import settings
-from app.database import Base, get_db
-from app.main import app
+# La configuración de los tests se fija AQUÍ, antes de importar nada de la app:
+# app.config valida al importarse y aborta si falta SECRET_KEY o DATABASE_URL.
+# Así la suite corre en un clon limpio o en CI sin depender de un .env local.
+os.environ["SECRET_KEY"] = "clave-de-pruebas-no-usar-en-produccion-0123456789"
+os.environ["DATABASE_URL"] = "sqlite://"
+
+from app.config import settings  # noqa: E402
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
 
 # Por defecto los tests corren con registro abierto; los tests de invitaciones
 # reactivan require_invite puntualmente con monkeypatch.
