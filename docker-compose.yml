@@ -28,6 +28,8 @@ services:
       # valor por defecto, un despliegue sin .env arrancaba firmando los JWT
       # con una clave conocida.
       SECRET_KEY: ${SECRET_KEY:?define SECRET_KEY en el fichero .env}
+      # Este compose es el de desarrollo: aquí /docs sí es útil.
+      ENVIRONMENT: dev
     ports:
       - "127.0.0.1:8000:8000"
 

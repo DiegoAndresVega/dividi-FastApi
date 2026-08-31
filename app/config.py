@@ -21,6 +21,10 @@ CLAVES_PUBLICADAS = frozenset(
 # Mínimo de entropía exigido a la clave de firma, en BYTES (no caracteres).
 LONGITUD_MINIMA_CLAVE = 32
 
+ENTORNO_DESARROLLO = "dev"
+ENTORNO_PRODUCCION = "prod"
+ENTORNOS = (ENTORNO_DESARROLLO, ENTORNO_PRODUCCION)
+
 _COMO_GENERARLA = 'python -c "import secrets; print(secrets.token_hex(32))"'
 
 
@@ -31,6 +35,10 @@ class Settings(BaseSettings):
     # aquí significa que la API arranca igual con una configuración equivocada.
     database_url: str
     secret_key: str
+
+    # Por defecto "prod": olvidar la variable debe dejar la app en su modo más
+    # cerrado, no en el más cómodo.
+    environment: str = ENTORNO_PRODUCCION
 
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
@@ -64,6 +72,17 @@ class Settings(BaseSettings):
     # Un gasto recurrente no puede materializar más de estos meses de golpe:
     # frena que una regla con fecha de inicio muy antigua cree cientos de gastos.
     recurring_max_catchup_months: int = 12
+
+    @property
+    def es_desarrollo(self) -> bool:
+        return self.environment == ENTORNO_DESARROLLO
+
+    @field_validator("environment")
+    @classmethod
+    def _entorno_conocido(cls, valor: str) -> str:
+        if valor not in ENTORNOS:
+            raise ValueError(f"debe ser uno de {', '.join(ENTORNOS)}")
+        return valor
 
     @field_validator("secret_key")
     @classmethod
