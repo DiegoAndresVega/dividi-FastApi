@@ -1,8 +1,12 @@
 """Tests de exportación CSV (M9) y foto del tique (M8)."""
 
-from tests.conftest import make_standard_group, register_and_login
+import io
 
-PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+from PIL import Image
+
+from tests.conftest import imagen_de_prueba, make_standard_group, register_and_login
+
+PNG_BYTES = imagen_de_prueba("PNG")
 
 
 def _grupo_con_gasto(client, headers):
@@ -68,7 +72,11 @@ def test_upload_and_download_receipt(client):
 
     descarga = client.get(url, headers=headers)
     assert descarga.status_code == 200
-    assert descarga.content == PNG_BYTES
+    # El tique se reprocesa al subirlo (se le quitan los metadatos EXIF), así
+    # que los bytes no son los mismos: lo que debe volver es la misma imagen.
+    devuelta = Image.open(io.BytesIO(descarga.content))
+    assert devuelta.format == "PNG"
+    assert devuelta.size == Image.open(io.BytesIO(PNG_BYTES)).size
     assert descarga.headers["content-type"].startswith("image/png")
 
 

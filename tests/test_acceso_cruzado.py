@@ -12,7 +12,12 @@ que es una decisión de diseño de cada endpoint.
 
 import io
 
-from tests.conftest import create_group, make_standard_group, register_and_login
+from tests.conftest import (
+    create_group,
+    imagen_de_prueba,
+    make_standard_group,
+    register_and_login,
+)
 
 SIN_ACCESO = (403, 404)
 
@@ -501,15 +506,9 @@ class TestTiques:
             },
             headers=headers,
         ).json()
-        # PNG mínimo válido.
-        png = bytes.fromhex(
-            "89504e470d0a1a0a0000000d494844520000000100000001080600000"
-            "01f15c4890000000a49444154789c636000000200010005fe02fea7f6"
-            "0d5d0000000049454e44ae426082"
-        )
         subida = client.post(
             f"/groups/{grupo['id']}/expenses/{gasto['id']}/receipt",
-            files={"file": ("tique.png", io.BytesIO(png), "image/png")},
+            files={"file": ("tique.png", io.BytesIO(imagen_de_prueba("PNG")), "image/png")},
             headers=headers,
         )
         assert subida.status_code == 200, subida.text
