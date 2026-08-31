@@ -1,8 +1,10 @@
+import io
 import os
 from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -77,6 +79,17 @@ def db_session():
         yield db
     finally:
         db.close()
+
+
+def imagen_de_prueba(formato: str = "PNG", tamano: tuple[int, int] = (64, 48)) -> bytes:
+    """Bytes de una imagen de verdad.
+
+    Los tiques se validan por su contenido, no por la cabecera Content-Type,
+    así que no vale inventarse unos bytes con la firma correcta delante.
+    """
+    buffer = io.BytesIO()
+    Image.new("RGB", tamano, (200, 120, 60)).save(buffer, format=formato)
+    return buffer.getvalue()
 
 
 def as_decimal(value) -> Decimal:
