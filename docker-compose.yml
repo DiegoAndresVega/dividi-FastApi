@@ -24,7 +24,10 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg2://gastos:gastos@db:5432/gastos
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-cambiar-en-produccion}
+      # ':?' hace que compose falle si la variable no está definida. Con un
+      # valor por defecto, un despliegue sin .env arrancaba firmando los JWT
+      # con una clave conocida.
+      SECRET_KEY: ${SECRET_KEY:?define SECRET_KEY en el fichero .env}
     ports:
       - "127.0.0.1:8000:8000"
 
