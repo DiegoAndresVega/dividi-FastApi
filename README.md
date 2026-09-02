@@ -20,7 +20,7 @@ Sin Docker (necesita un PostgreSQL local, o solo para los tests):
 ```bash
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-alembic upgrade head        # aplica migraciones (requiere DATABASE_URL)
+alembic upgrade head        # aplica migraciones (con MIGRATION_DATABASE_URL en DATABASE_URL)
 uvicorn app.main:app --reload
 ```
 
