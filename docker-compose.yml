@@ -11,19 +11,41 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Crea el rol con el que se conecta la API, solo con permisos de datos.
+      # Los scripts de esta carpeta corren únicamente al inicializar el volumen:
+      # sobre un volumen que ya existe hay que aplicarlo a mano con
+      # scripts/db/aplicar-privilegios.sh (ver docs/privilegios-bd.md).
+      - ./scripts/db/privilegios.sql:/docker-entrypoint-initdb.d/10-privilegios.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gastos -d gastos"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  api:
+  # Las migraciones son lo único que necesita crear y alterar tablas, así que
+  # son lo único que se conecta como dueño de la base. Corre hasta terminar y
+  # se apaga; la API no arranca hasta entonces.
+  migrate:
     build: .
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg2://gastos:gastos@db:5432/gastos
+      SECRET_KEY: ${SECRET_KEY:?define SECRET_KEY en el fichero .env}
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      # Rol sin DDL: puede leer y escribir filas, no borrar ni alterar tablas.
+      DATABASE_URL: postgresql+psycopg2://gastos_app:gastos_app@db:5432/gastos
       # ':?' hace que compose falle si la variable no está definida. Con un
       # valor por defecto, un despliegue sin .env arrancaba firmando los JWT
       # con una clave conocida.
