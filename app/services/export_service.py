@@ -4,10 +4,21 @@ lo que espera el Excel en español; BOM para que detecte UTF-8."""
 
 import csv
 import io
+import re
 from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.models import Group
+
+# Con estos caracteres una hoja de cálculo deja de leer la celda como texto y
+# la interpreta: fórmula (=), signo (+ -), referencia a otra hoja (@) y los que
+# Excel usa para separar al pegar (tabulador y retornos).
+INICIOS_DE_FORMULA = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+# Lo que produce _dec: «1234,50» o «-12,50». Un importe negativo empieza por
+# «-», pero Excel lo lee como número: ponerle el apóstrofo delante convertiría
+# en texto todos los balances en contra y el CSV dejaría de sumar.
+_NUMERO = re.compile(r"^-?\d+(?:,\d+)?$")
 
 
 def _dec(value: Decimal | None) -> str:
@@ -16,12 +27,40 @@ def _dec(value: Decimal | None) -> str:
     return f"{value:.2f}".replace(".", ",")
 
 
+def _neutralizar(valor: str) -> str:
+    """Antepone un apóstrofo al texto que una hoja de cálculo ejecutaría.
+
+    El apóstrofo no se ve al abrir el fichero: le dice a Excel y a LibreOffice
+    que la celda es texto literal.
+    """
+    if not isinstance(valor, str) or not valor.startswith(INICIOS_DE_FORMULA):
+        return valor
+    if _NUMERO.match(valor):
+        return valor
+    return f"'{valor}"
+
+
+class _EscritorNeutralizado:
+    """Escritor CSV que pasa cada celda por `_neutralizar`.
+
+    Envolver el escritor en vez de escapar en cada `writerow` deja el arreglo
+    en un único sitio: vale para gastos, pagos, balances y settle-up, y para
+    las secciones que se añadan después sin tener que acordarse.
+    """
+
+    def __init__(self, destino: io.StringIO) -> None:
+        self._writer = csv.writer(destino, delimiter=";")
+
+    def writerow(self, fila: list) -> None:
+        self._writer.writerow([_neutralizar(celda) for celda in fila])
+
+
 def build_csv(group: Group, balances: dict, settlements: list) -> str:
     members = list(group.members)
     names = {m.id: m.display_name for m in members}
 
     buffer = io.StringIO()
-    writer = csv.writer(buffer, delimiter=";")
+    writer = _EscritorNeutralizado(buffer)
 
     writer.writerow(["Grupo", group.name, group.default_currency])
     writer.writerow(
