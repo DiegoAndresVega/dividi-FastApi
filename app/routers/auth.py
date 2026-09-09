@@ -8,17 +8,16 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import GroupMember, User
+from app.models import GroupMember, RefreshToken, User
 from app.rate_limit import auth_limit, limiter
 from app.schemas.user import RefreshRequest, Token, UserCreate, UserOut
 from app.security import (
     create_access_token,
-    create_refresh_token,
     decode_token,
     hash_password,
     verify_password,
 )
-from app.services import invitation_service
+from app.services import invitation_service, refresh_token_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -78,10 +77,14 @@ def login(
             detail="Email o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return Token(
+    # el login abre familia nueva; de paso se tiran las filas ya caducadas
+    refresh_token_service.limpiar_caducados(db)
+    tokens = Token(
         access_token=create_access_token(user.id),
-        refresh_token=create_refresh_token(user.id),
+        refresh_token=refresh_token_service.emitir(db, user.id),
     )
+    db.commit()
+    return tokens
 
 
 @router.post("/refresh", response_model=Token)
@@ -96,15 +99,49 @@ def refresh(request: Request, payload: RefreshRequest, db: Session = Depends(get
         raise invalid
     if data.get("type") != "refresh":
         raise invalid
+    # Sin jti no hay forma de saber si el token sigue vivo. Los emitidos antes
+    # de la revocación no lo llevan: se rechazan a propósito, porque aceptarlos
+    # dejaría el agujero abierto el año que duran.
     try:
-        user_id = uuid.UUID(data.get("sub", ""))
-    except ValueError:
+        jti = uuid.UUID(data.get("jti", ""))
+    except (ValueError, TypeError):
+        raise invalid
+
+    try:
+        user_id, nuevo_refresh = refresh_token_service.rotar(db, jti)
+    except refresh_token_service.RefreshTokenInvalido:
+        # la rotación puede haber revocado la familia al detectar una copia,
+        # y eso hay que guardarlo aunque la petición acabe en 401
+        db.commit()
         raise invalid
 
     user = db.get(User, user_id)
     if user is None:
+        db.rollback()
         raise invalid
-    return Token(
-        access_token=create_access_token(user.id),
-        refresh_token=create_refresh_token(user.id),
-    )
+
+    tokens = Token(access_token=create_access_token(user.id), refresh_token=nuevo_refresh)
+    db.commit()
+    return tokens
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(auth_limit)
+def logout(request: Request, payload: RefreshRequest, db: Session = Depends(get_db)):
+    """Cierra la sesión en el servidor, no solo en el dispositivo.
+
+    Responde 204 siempre, valga el token o no: si distinguiera, serviría para
+    averiguar qué tokens existen. Revoca la familia entera, que es lo que de
+    verdad es una sesión.
+    """
+    try:
+        data = decode_token(payload.refresh_token)
+        jti = uuid.UUID(data.get("jti", ""))
+    except (jwt.PyJWTError, ValueError, TypeError):
+        return None
+
+    anotado = db.get(RefreshToken, jti)
+    if anotado is not None:
+        refresh_token_service.revocar_familia(db, anotado.family_id)
+        db.commit()
+    return None
