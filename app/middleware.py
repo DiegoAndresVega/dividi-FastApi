@@ -15,7 +15,17 @@ _SECURITY_HEADERS = {
     "Referrer-Policy": "no-referrer",
     # sin recursos externos: la API solo devuelve datos e imágenes propias
     "Content-Security-Policy": "default-src 'none'; img-src 'self'",
+    # la API no necesita ninguna capacidad del navegador: se niegan todas
+    "Permissions-Policy": (
+        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
+        "magnetometer=(), microphone=(), payment=(), usb=()"
+    ),
 }
+
+# Un año, el mínimo que piden las guías para que la cabecera sirva de algo.
+# Sin 'preload': entrar en la lista que llevan los navegadores dentro no se
+# deshace en meses, y no compensa para un dominio con una sola aplicación.
+_HSTS = "max-age=31536000; includeSubDomains"
 
 
 class MaxBodySizeMiddleware(BaseHTTPMiddleware):
@@ -46,4 +56,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         for header, value in _SECURITY_HEADERS.items():
             response.headers.setdefault(header, value)
+        # HSTS solo en producción: la RFC 6797 prohíbe mandarla por HTTP, y en
+        # local la API va por http://localhost. Enviarla ahí dejaría el
+        # navegador del desarrollador forzando https a localhost durante un año.
+        if not settings.es_desarrollo:
+            response.headers.setdefault("Strict-Transport-Security", _HSTS)
         return response
