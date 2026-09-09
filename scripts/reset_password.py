@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.security import hash_password
+from app.services import refresh_token_service
 
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 72  # tope de bcrypt, el mismo que valida la API
@@ -63,9 +64,14 @@ def restablecer(db: Session, email: str, password: str) -> int:
         return 1
 
     usuario.hashed_password = hash_password(password)
+    # Cambiar la contraseña sin tirar las sesiones no sirve de nada cuando el
+    # motivo del cambio es que alguien más entró: su refresh token seguiría
+    # valiendo un año. Se cierran todas y se vuelve a entrar en cada aparato.
+    refresh_token_service.revocar_usuario(db, usuario.id)
     db.commit()
     print(f"Contraseña restablecida para {usuario.email} ({usuario.name}).")
-    print("Ya puedes iniciar sesión en la app con la contraseña nueva.")
+    print("Se han cerrado las sesiones abiertas: habrá que iniciar sesión de nuevo")
+    print("en cada dispositivo, con la contraseña nueva.")
     return 0
 
 
