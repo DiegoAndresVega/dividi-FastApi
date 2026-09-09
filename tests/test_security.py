@@ -3,7 +3,7 @@ cabeceras de seguridad y el tope de recuperación de gastos recurrentes."""
 
 import pytest
 
-from app.config import settings
+from app.config import ENTORNO_DESARROLLO, ENTORNO_PRODUCCION, settings
 from app.rate_limit import limiter
 from tests.conftest import make_standard_group, register_and_login
 
@@ -87,3 +87,30 @@ def test_recurring_rejects_past_start_period(client):
 
     assert response.status_code == 400
     assert "pasado" in response.json()["detail"].lower()
+
+
+def test_hsts_present_in_production(client, monkeypatch):
+    # HSTS solo tiene sentido sobre HTTPS, y en producción todo entra por Caddy
+    monkeypatch.setattr(settings, "environment", ENTORNO_PRODUCCION)
+
+    hsts = client.get("/health").headers["strict-transport-security"]
+
+    assert "max-age=31536000" in hsts
+    assert "includeSubDomains" in hsts
+    # 'preload' no: entrar en la lista de los navegadores no se deshace en meses
+    assert "preload" not in hsts
+
+
+def test_hsts_absent_in_development(client, monkeypatch):
+    # en local la API va por http://localhost: mandar HSTS dejaría el navegador
+    # del desarrollador forzando https a localhost durante un año
+    monkeypatch.setattr(settings, "environment", ENTORNO_DESARROLLO)
+
+    assert "strict-transport-security" not in client.get("/health").headers
+
+
+def test_permissions_policy_denies_browser_features(client):
+    policy = client.get("/health").headers["permissions-policy"]
+
+    for feature in ("camera", "microphone", "geolocation"):
+        assert f"{feature}=()" in policy
