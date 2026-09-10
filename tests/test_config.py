@@ -79,7 +79,7 @@ class TestSecretKey:
     def test_acepta_una_clave_valida(self, entorno_limpio):
         settings = _construir(database_url=URL_VALIDA, secret_key=CLAVE_VALIDA)
 
-        assert settings.secret_key == CLAVE_VALIDA
+        assert settings.secret_key.get_secret_value() == CLAVE_VALIDA
 
     def test_mide_bytes_y_no_caracteres(self, entorno_limpio):
         # 20 eñes son 20 caracteres pero 40 bytes en UTF-8. El umbral del punto
@@ -124,4 +124,4 @@ class TestArranque:
         monkeypatch.setenv("SECRET_KEY", CLAVE_VALIDA)
         monkeypatch.setenv("DATABASE_URL", URL_VALIDA)
 
-        assert cargar_settings(env_file=None).secret_key == CLAVE_VALIDA
+        assert cargar_settings(env_file=None).secret_key.get_secret_value() == CLAVE_VALIDA
