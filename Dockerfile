@@ -2,8 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /code
 
+# requirements.txt lleva versiones exactas y hashes, compilado desde
+# requirements.in. --require-hashes obliga a que cada paquete descargado
+# coincida con el hash anotado: dos construcciones del mismo commit instalan
+# exactamente lo mismo, y un paquete manipulado en el camino no entra.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 COPY . .
 
