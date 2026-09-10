@@ -26,5 +26,5 @@ slowapi>=0.1.9,<1.0
 
 # Solo para la suite de tests. Van en el mismo fichero porque el CI instala lo
 # mismo que la imagen y así no hay dos resoluciones distintas que mantener.
-pytest>=8.2,<9.0
+pytest>=9.0.3,<10.0
 httpx>=0.27,<1.0
