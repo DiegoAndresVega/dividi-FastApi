@@ -6,6 +6,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
+from app.logging_config import configurar_logging
 from app.middleware import MaxBodySizeMiddleware, SecurityHeadersMiddleware
 from app.rate_limit import limiter
 from app.routers import (
@@ -54,6 +55,11 @@ def _opciones_de_documentacion() -> dict:
 
 
 def crear_app() -> FastAPI:
+    # Antes de nada: los logs de la API van a stdout y de ahí a `docker logs`,
+    # que los deja en disco sin cifrar. El filtro enmascara lo que no debe
+    # quedar escrito ahí. Ver app/logging_config.py.
+    configurar_logging()
+
     app = FastAPI(
         title="Dividi",
         version="1.0.0",

@@ -1,6 +1,6 @@
 import hashlib
 
-from pydantic import ValidationError, field_validator
+from pydantic import SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Claves de ejemplo que en algún momento estuvieron escritas en este repositorio.
@@ -33,8 +33,14 @@ class Settings(BaseSettings):
 
     # Sin valor por defecto a propósito: son obligatorias. Un valor por defecto
     # aquí significa que la API arranca igual con una configuración equivocada.
-    database_url: str
-    secret_key: str
+    # SecretStr y no str: el objeto Settings viaja por toda la aplicación, y
+    # basta con que alguien lo formatee —un traceback, un print de depuración,
+    # un log de arranque— para dejar la clave de firma y la contraseña de la
+    # base de datos escritas en el registro del contenedor. Enmascarado, lo que
+    # sale es `SecretStr('**********')`. Leer el valor exige pedirlo a
+    # propósito con .get_secret_value().
+    database_url: SecretStr
+    secret_key: SecretStr
 
     # Por defecto "prod": olvidar la variable debe dejar la app en su modo más
     # cerrado, no en el más cómodo.
@@ -86,7 +92,9 @@ class Settings(BaseSettings):
 
     @field_validator("secret_key")
     @classmethod
-    def _clave_de_firma_utilizable(cls, valor: str) -> str:
+    def _clave_de_firma_utilizable(cls, secreto: SecretStr) -> SecretStr:
+        valor = secreto.get_secret_value()
+
         if _esta_publicada(valor):
             raise ValueError(
                 "es una clave de ejemplo del repositorio, que es pública; "
@@ -103,7 +111,7 @@ class Settings(BaseSettings):
                 f"como mínimo; genera una con: {_COMO_GENERARLA}"
             )
 
-        return valor
+        return secreto
 
 
 def _esta_publicada(valor: str) -> bool:

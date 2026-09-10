@@ -46,7 +46,8 @@ def _create_token(
     }
     if jti is not None:
         payload["jti"] = str(jti)
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm), expires_at
+    clave = settings.secret_key.get_secret_value()
+    return jwt.encode(payload, clave, algorithm=settings.algorithm), expires_at
 
 
 def create_access_token(user_id: uuid.UUID) -> str:
@@ -67,4 +68,4 @@ def create_refresh_token(user_id: uuid.UUID) -> IssuedRefreshToken:
 
 def decode_token(token: str) -> dict:
     """Decodifica y valida un JWT. Lanza jwt.PyJWTError si es inválido o expiró."""
-    return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    return jwt.decode(token, settings.secret_key.get_secret_value(), algorithms=[settings.algorithm])

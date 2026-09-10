@@ -124,9 +124,9 @@ def test_un_refresh_token_sin_jti_es_rechazado(client):
     escribir la contraseña una vez.
     """
     datos = _registrar(client)
-    antiguo = jwt.decode(datos["refresh_token"], settings.secret_key, algorithms=[settings.algorithm])
+    antiguo = jwt.decode(datos["refresh_token"], settings.secret_key.get_secret_value(), algorithms=[settings.algorithm])
     antiguo.pop("jti", None)
-    sin_jti = jwt.encode(antiguo, settings.secret_key, algorithm=settings.algorithm)
+    sin_jti = jwt.encode(antiguo, settings.secret_key.get_secret_value(), algorithm=settings.algorithm)
 
     assert _refrescar(client, sin_jti).status_code == 401
 
@@ -141,7 +141,7 @@ def test_un_jti_inventado_no_cuela(client):
             "iat": datetime.now(timezone.utc),
             "exp": datetime.now(timezone.utc) + timedelta(days=1),
         },
-        settings.secret_key,
+        settings.secret_key.get_secret_value(),
         algorithm=settings.algorithm,
     )
 
