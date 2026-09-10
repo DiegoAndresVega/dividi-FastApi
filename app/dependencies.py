@@ -1,7 +1,7 @@
 import uuid
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,9 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -34,6 +36,11 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None:
         raise credentials_error
+
+    # Lo recoge RegistroDeOperacionesMiddleware al terminar la petición. Se
+    # deja aquí, donde el token ya está verificado: un id sacado de un token
+    # sin comprobar no vale para un registro de seguridad.
+    request.state.user_id = user.id
     return user
 
 

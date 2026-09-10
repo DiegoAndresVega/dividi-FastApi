@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
+from app.security_events import registrar
 from app.schemas.user import PasswordChange, UserOut, UserUpdate
 from app.security import hash_password, verify_password
 
@@ -30,13 +31,16 @@ def update_me(
 
 @router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
 def change_password(
+    request: Request,
     payload: PasswordChange,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     if not verify_password(payload.current_password, user.hashed_password):
+        registrar("cambio_de_contrasena_fallido", request, user_id=user.id)
         raise HTTPException(
             status_code=400, detail="La contraseña actual no es correcta"
         )
     user.hashed_password = hash_password(payload.new_password)
     db.commit()
+    registrar("cambio_de_contrasena", request, user_id=user.id)

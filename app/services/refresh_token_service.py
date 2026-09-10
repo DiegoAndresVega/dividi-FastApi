@@ -30,6 +30,16 @@ class RefreshTokenInvalido(Exception):
     """El token no existe, ya se usó, se revocó o caducó."""
 
 
+class RefreshTokenReutilizado(RefreshTokenInvalido):
+    """Un token ya gastado reapareció fuera del margen: alguien tiene una copia.
+
+    Subclase de RefreshTokenInvalido para que quien solo quiera rechazar la
+    petición siga capturando una sola cosa. Se distingue porque esto no es un
+    token caducado más: es la única señal de robo que da el sistema, y merece
+    su propio evento en el registro de seguridad.
+    """
+
+
 def emitir(db: Session, user_id: uuid.UUID, family_id: uuid.UUID | None = None) -> str:
     """Firma un refresh token nuevo y lo anota como vivo.
 
@@ -63,7 +73,7 @@ def rotar(db: Session, jti: uuid.UUID) -> tuple[uuid.UUID, str]:
             # reutilización de verdad: la copia puede estar en cualquiera de los
             # dos lados, así que se cierra la sesión entera y ambos al login
             revocar_familia(db, anotado.family_id)
-            raise RefreshTokenInvalido
+            raise RefreshTokenReutilizado
         # dentro del margen: se le da un token nuevo de la misma familia y no
         # pasa nada. Los dos que corrían acaban con uno válido cada uno
         return anotado.user_id, emitir(db, anotado.user_id, family_id=anotado.family_id)

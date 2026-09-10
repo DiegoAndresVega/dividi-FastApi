@@ -54,6 +54,15 @@ services:
       ENVIRONMENT: dev
     ports:
       - "127.0.0.1:8000:8000"
+    # Los eventos de seguridad salen por stdout y los recoge Docker. Sin
+    # rotación, el fichero JSON del contenedor crece sin techo hasta llenar el
+    # disco, y un disco lleno tumba la base de datos. 10 ficheros de 20 MB dan
+    # de sobra para la semana que hay que poder reconstruir.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "10"
 
 volumes:
   pgdata:

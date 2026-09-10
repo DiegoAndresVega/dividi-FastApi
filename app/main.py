@@ -7,7 +7,11 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
 from app.logging_config import configurar_logging
-from app.middleware import MaxBodySizeMiddleware, SecurityHeadersMiddleware
+from app.middleware import (
+    MaxBodySizeMiddleware,
+    RegistroDeOperacionesMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.rate_limit import limiter
 from app.routers import (
     auth,
@@ -79,6 +83,8 @@ def crear_app() -> FastAPI:
     # Rechaza cuerpos gigantes antes de leerlos; añade cabeceras de seguridad.
     app.add_middleware(MaxBodySizeMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
+    # Quién hizo qué, para poder reconstruirlo después. Ver app/security_events.py.
+    app.add_middleware(RegistroDeOperacionesMiddleware)
 
     for router in ROUTERS:
         app.include_router(router.router)

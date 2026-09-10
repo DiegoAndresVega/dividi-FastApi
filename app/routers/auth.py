@@ -17,6 +17,7 @@ from app.security import (
     hash_password,
     verify_password,
 )
+from app.security_events import registrar
 from app.services import invitation_service, refresh_token_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -60,6 +61,12 @@ def register(request: Request, payload: UserCreate, db: Session = Depends(get_db
 
     db.commit()
     db.refresh(user)
+    registrar(
+        "alta_de_usuario",
+        request,
+        user_id=user.id,
+        por_invitacion=invitation is not None,
+    )
     return user
 
 
@@ -72,6 +79,11 @@ def login(
 ):
     user = db.scalar(select(User).where(User.email == form.username.lower()))
     if user is None or not verify_password(form.password, user.hashed_password):
+        # Sin el email: un registro de intentos fallidos con el email dentro es
+        # una lista de correos válidos para quien llegue a leer los logs. El id
+        # solo se pone cuando el usuario existe, que ya dice si el fallo fue de
+        # contraseña o de cuenta inexistente.
+        registrar("login_fallido", request, user_id=user.id if user else None)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email o contraseña incorrectos",
@@ -84,6 +96,7 @@ def login(
         refresh_token=refresh_token_service.emitir(db, user.id),
     )
     db.commit()
+    registrar("login_correcto", request, user_id=user.id)
     return tokens
 
 
@@ -109,10 +122,15 @@ def refresh(request: Request, payload: RefreshRequest, db: Session = Depends(get
 
     try:
         user_id, nuevo_refresh = refresh_token_service.rotar(db, jti)
-    except refresh_token_service.RefreshTokenInvalido:
-        # la rotación puede haber revocado la familia al detectar una copia,
-        # y eso hay que guardarlo aunque la petición acabe en 401
+    except refresh_token_service.RefreshTokenReutilizado:
+        # La única señal de robo que da el sistema: un token ya gastado que
+        # reaparece. La sesión entera acaba de caerse y ambos vuelven al login.
         db.commit()
+        registrar("refresh_token_reutilizado", request)
+        raise invalid
+    except refresh_token_service.RefreshTokenInvalido:
+        db.commit()
+        registrar("refresh_rechazado", request)
         raise invalid
 
     user = db.get(User, user_id)
@@ -122,6 +140,7 @@ def refresh(request: Request, payload: RefreshRequest, db: Session = Depends(get
 
     tokens = Token(access_token=create_access_token(user.id), refresh_token=nuevo_refresh)
     db.commit()
+    registrar("refresh", request, user_id=user.id)
     return tokens
 
 
@@ -144,4 +163,5 @@ def logout(request: Request, payload: RefreshRequest, db: Session = Depends(get_
     if anotado is not None:
         refresh_token_service.revocar_familia(db, anotado.family_id)
         db.commit()
+        registrar("logout", request, user_id=anotado.user_id)
     return None
