@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Misma instalación que hace el Dockerfile. Si el lockfile no cuadra con
+      # requirements.in, o un hash no coincide, se ve aquí y no en el despliegue.
+      - name: Instalar dependencias
+        run: pip install --require-hashes -r requirements.txt
+
+      - name: Ejecutar la suite
+        run: pytest -q
+
+  auditoria:
+    name: Auditoría de dependencias
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Instalar las dependencias que van a producción
+        run: pip install --require-hashes -r requirements.txt
+
+      # pip-audit va por pipx, en su propio entorno: instalado con pip acabaría
+      # auditando también sus propias dependencias, que no viajan a producción.
+      # Se audita el entorno ya montado y no el fichero, porque pip-audit
+      # --requirement levanta un venv y vuelve a resolver: aquí ya está resuelto
+      # y es exactamente lo que lleva la imagen.
+      - name: Instalar pip-audit
+        run: pipx install pip-audit
+
+      # --strict falla ante CUALQUIER vulnerabilidad conocida, no solo las de
+      # severidad alta: pip-audit no filtra por severidad, y con catorce
+      # dependencias directas el ruido es asumible. Si algún aviso resulta no
+      # aplicable, se añade --ignore-vuln GHSA-xxxx con el motivo escrito al
+      # lado, que es mejor que bajar el listón para todos.
+      - name: Auditar
+        run: pip-audit --strict --progress-spinner off
