@@ -1,0 +1,30 @@
+# Dependencias de la API, con los rangos que se aceptan.
+#
+# El fichero que se instala es requirements.txt, compilado a partir de este con
+# versiones exactas y hashes. No se edita a mano. Para regenerarlo:
+#
+#   uv pip compile requirements.in --generate-hashes \
+#       --python-version 3.12 --python-platform linux -o requirements.txt
+#
+# Los rangos llevan tope superior en la mayor: una major nueva de SQLAlchemy o
+# de Pydantic rompe cosas, y conviene enterarse al recompilar y no en el
+# despliegue.
+
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+sqlalchemy>=2.0.30,<3.0
+psycopg2-binary>=2.9,<3.0
+pydantic>=2.7,<3.0
+pydantic-settings>=2.3,<3.0
+email-validator>=2.1,<3.0
+alembic>=1.13,<2.0
+PyJWT>=2.8,<3.0
+bcrypt>=4.1,<6.0
+python-multipart>=0.0.9,<1.0
+Pillow>=10.0,<13.0
+slowapi>=0.1.9,<1.0
+
+# Solo para la suite de tests. Van en el mismo fichero porque el CI instala lo
+# mismo que la imagen y así no hay dos resoluciones distintas que mantener.
+pytest>=8.2,<9.0
+httpx>=0.27,<1.0
