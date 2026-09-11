@@ -107,7 +107,7 @@ def refresh(request: Request, payload: RefreshRequest, db: Session = Depends(get
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token inválido"
     )
     try:
-        data = decode_token(payload.refresh_token)
+        data = decode_token(payload.refresh_token, exigir_procedencia=False)
     except jwt.PyJWTError:
         raise invalid
     if data.get("type") != "refresh":
@@ -154,7 +154,7 @@ def logout(request: Request, payload: RefreshRequest, db: Session = Depends(get_
     verdad es una sesión.
     """
     try:
-        data = decode_token(payload.refresh_token)
+        data = decode_token(payload.refresh_token, exigir_procedencia=False)
         jti = uuid.UUID(data.get("jti", ""))
     except (jwt.PyJWTError, ValueError, TypeError):
         return None

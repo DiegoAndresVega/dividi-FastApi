@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 
 from app.config import settings
+from app.security import decode_token
 from app.services import refresh_token_service
 
 
@@ -124,7 +125,8 @@ def test_un_refresh_token_sin_jti_es_rechazado(client):
     escribir la contraseña una vez.
     """
     datos = _registrar(client)
-    antiguo = jwt.decode(datos["refresh_token"], settings.secret_key.get_secret_value(), algorithms=[settings.algorithm])
+    # sin exigir procedencia: es el mismo camino tolerante que usa /auth/refresh
+    antiguo = decode_token(datos["refresh_token"], exigir_procedencia=False)
     antiguo.pop("jti", None)
     sin_jti = jwt.encode(antiguo, settings.secret_key.get_secret_value(), algorithm=settings.algorithm)
 
