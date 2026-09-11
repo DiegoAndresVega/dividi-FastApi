@@ -25,7 +25,14 @@ class Payment(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     note: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # quién apuntó el pago. Nullable a propósito: las filas anteriores a la
+    # migración 0009 no lo saben, y borrar al usuario no debe llevarse el pago
+    # por delante (el saldo es del grupo, no suyo).
+    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     group = relationship("Group", back_populates="payments")
     from_member = relationship("GroupMember", foreign_keys=[from_member_id])
     to_member = relationship("GroupMember", foreign_keys=[to_member_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
