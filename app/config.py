@@ -21,6 +21,11 @@ CLAVES_PUBLICADAS = frozenset(
 # Mínimo de entropía exigido a la clave de firma, en BYTES (no caracteres).
 LONGITUD_MINIMA_CLAVE = 32
 
+# Solo HMAC con SHA-2: la lista existe para que `none` —el JWT sin firma— no
+# pueda entrar por una variable de entorno mal puesta. La firma asimétrica no
+# se usa aquí: emisor y verificador son el mismo servicio.
+ALGORITMOS_ADMITIDOS = ("HS256", "HS384", "HS512")
+
 ENTORNO_DESARROLLO = "dev"
 ENTORNO_PRODUCCION = "prod"
 ENTORNOS = (ENTORNO_DESARROLLO, ENTORNO_PRODUCCION)
@@ -47,6 +52,10 @@ class Settings(BaseSettings):
     environment: str = ENTORNO_PRODUCCION
 
     algorithm: str = "HS256"
+    # Emisor y audiencia de los tokens. Atan un token a ESTA API y a ESTA app:
+    # uno firmado en otro entorno que compartiese la clave no entra aquí.
+    jwt_issuer: str = "dividi-api"
+    jwt_audience: str = "dividi-app"
     access_token_expire_minutes: int = 30
     # Sesión larga al estilo de las apps de uso diario: el refresh token dura
     # un año y se renueva en cada uso (rotación en /auth/refresh), así que
@@ -88,6 +97,16 @@ class Settings(BaseSettings):
     def _entorno_conocido(cls, valor: str) -> str:
         if valor not in ENTORNOS:
             raise ValueError(f"debe ser uno de {', '.join(ENTORNOS)}")
+        return valor
+
+    @field_validator("algorithm")
+    @classmethod
+    def _algoritmo_admitido(cls, valor: str) -> str:
+        if valor not in ALGORITMOS_ADMITIDOS:
+            raise ValueError(
+                f"debe ser uno de {', '.join(ALGORITMOS_ADMITIDOS)}; "
+                "`none` firmaría los tokens con nada"
+            )
         return valor
 
     @field_validator("secret_key")
