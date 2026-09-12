@@ -7,6 +7,7 @@ from app.models import User
 from app.security_events import registrar
 from app.schemas.user import PasswordChange, UserOut, UserUpdate
 from app.security import hash_password, verify_password
+from app.services import refresh_token_service
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -42,5 +43,15 @@ def change_password(
             status_code=400, detail="La contraseña actual no es correcta"
         )
     user.hashed_password = hash_password(payload.new_password)
+    # La contraseña se cambia cuando se sospecha que alguien más entró, y su
+    # refresh token seguiría valiendo un año. Se cierran todas las sesiones,
+    # también la de este aparato, en la misma transacción que el hash: o se
+    # guardan las dos cosas o ninguna.
+    sesiones_cerradas = refresh_token_service.revocar_usuario(db, user.id)
     db.commit()
-    registrar("cambio_de_contrasena", request, user_id=user.id)
+    registrar(
+        "cambio_de_contrasena",
+        request,
+        user_id=user.id,
+        sesiones_cerradas=sesiones_cerradas,
+    )

@@ -166,6 +166,23 @@ class TestCambioDeContrasena:
         assert "password123" not in volcado
         assert "otra-distinta-9" not in volcado
 
+    def test_dice_cuantas_sesiones_se_cerraron(self, client, eventos):
+        # Arrange: dos aparatos con sesión abierta
+        headers = register_and_login(client, "ana@example.com")
+        client.post(
+            "/auth/login", data={"username": "ana@example.com", "password": "password123"}
+        )
+
+        # Act
+        client.post(
+            "/me/password",
+            headers=headers,
+            json={"current_password": "password123", "new_password": "otra-distinta-9"},
+        )
+
+        # Assert
+        assert eventos.de("cambio_de_contrasena")[0]["sesiones_cerradas"] == 2
+
 
 class TestOperacionesQueCambianAlgo:
     """El criterio: reconstruir quién hizo qué."""

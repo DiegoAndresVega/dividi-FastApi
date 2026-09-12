@@ -9,7 +9,7 @@ distinguir al dueño del ladrón—, así que se cae la familia entera.
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, update
+from sqlalchemy import delete, distinct, func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import RefreshToken
@@ -74,6 +74,11 @@ def rotar(db: Session, jti: uuid.UUID) -> tuple[uuid.UUID, str]:
             # dos lados, así que se cierra la sesión entera y ambos al login
             revocar_familia(db, anotado.family_id)
             raise RefreshTokenReutilizado
+        if anotado.revoked_at is not None:
+            # la sesión se cerró entre medias (logout, cambio de contraseña): el
+            # margen es para la carrera benigna, no para sacar un token nuevo de
+            # una sesión que ya no existe
+            raise RefreshTokenInvalido
         # dentro del margen: se le da un token nuevo de la misma familia y no
         # pasa nada. Los dos que corrían acaban con uno válido cada uno
         return anotado.user_id, emitir(db, anotado.user_id, family_id=anotado.family_id)
@@ -94,13 +99,29 @@ def revocar_familia(db: Session, family_id: uuid.UUID) -> None:
     )
 
 
-def revocar_usuario(db: Session, user_id: uuid.UUID) -> None:
-    """Cierra todas las sesiones de un usuario, en todos sus dispositivos."""
+def revocar_usuario(db: Session, user_id: uuid.UUID) -> int:
+    """Cierra todas las sesiones de un usuario, en todos sus dispositivos.
+
+    Devuelve cuántas seguían abiertas. Cuenta familias con un token todavía
+    utilizable, no filas: cada rotación deja atrás una fila gastada.
+    """
+    ahora = datetime.now(timezone.utc)
+    abiertas = db.scalar(
+        select(func.count(distinct(RefreshToken.family_id))).where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.used_at.is_(None),
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > ahora,
+        )
+    )
+    # se revocan también las gastadas: dentro del margen de gracia todavía
+    # podrían dar un token nuevo
     db.execute(
         update(RefreshToken)
         .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
-        .values(revoked_at=datetime.now(timezone.utc))
+        .values(revoked_at=ahora)
     )
+    return abiertas or 0
 
 
 def limpiar_caducados(db: Session) -> None:
