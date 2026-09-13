@@ -24,11 +24,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.security import hash_password
+from app.security import (
+    LONGITUD_MAXIMA_CONTRASENA,
+    LONGITUD_MINIMA_CONTRASENA,
+    cabe_en_bcrypt,
+    hash_password,
+)
 from app.services import refresh_token_service
-
-PASSWORD_MIN_LENGTH = 8
-PASSWORD_MAX_LENGTH = 72  # tope de bcrypt, el mismo que valida la API
 
 
 def listar_cuentas(db: Session) -> int:
@@ -50,10 +52,11 @@ def listar_cuentas(db: Session) -> int:
 
 def restablecer(db: Session, email: str, password: str) -> int:
     """Escribe el hash de la contraseña nueva. Devuelve el código de salida."""
-    if not PASSWORD_MIN_LENGTH <= len(password) <= PASSWORD_MAX_LENGTH:
+    if len(password) < LONGITUD_MINIMA_CONTRASENA or not cabe_en_bcrypt(password):
         print(
-            f"ERROR: la contraseña debe tener entre {PASSWORD_MIN_LENGTH} y "
-            f"{PASSWORD_MAX_LENGTH} caracteres.",
+            f"ERROR: la contraseña debe tener al menos {LONGITUD_MINIMA_CONTRASENA} "
+            f"caracteres y no ocupar más de {LONGITUD_MAXIMA_CONTRASENA} bytes "
+            "(las letras con tilde y la ñ ocupan dos).",
             file=sys.stderr,
         )
         return 1

@@ -26,6 +26,11 @@ LONGITUD_MINIMA_CLAVE = 32
 # se usa aquí: emisor y verificador son el mismo servicio.
 ALGORITMOS_ADMITIDOS = ("HS256", "HS384", "HS512")
 
+# Coste de bcrypt admitido. Por debajo de 10 un hash se calcula demasiado
+# rápido para frenar a quien tenga la base de datos; 31 es el tope de bcrypt.
+COSTE_BCRYPT_MINIMO = 10
+COSTE_BCRYPT_MAXIMO = 31
+
 ENTORNO_DESARROLLO = "dev"
 ENTORNO_PRODUCCION = "prod"
 ENTORNOS = (ENTORNO_DESARROLLO, ENTORNO_PRODUCCION)
@@ -61,6 +66,10 @@ class Settings(BaseSettings):
     # un año y se renueva en cada uso (rotación en /auth/refresh), así que
     # quien abre la app de vez en cuando no vuelve a ver la pantalla de login.
     refresh_token_expire_days: int = 365
+    # Coste de bcrypt, fijado aquí para que no lo decida el valor por defecto de
+    # la librería y cambie solo al actualizarla. 12 es el que ya tenían todos los
+    # hashes guardados. Subirlo no invalida ninguno: cada hash lleva su coste.
+    bcrypt_rounds: int = 12
 
     # Registro invite-only: exige un código de invitación válido para registrarse.
     # El primer usuario del sistema (fundador) queda exento del requisito.
@@ -106,6 +115,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"debe ser uno de {', '.join(ALGORITMOS_ADMITIDOS)}; "
                 "`none` firmaría los tokens con nada"
+            )
+        return valor
+
+    @field_validator("bcrypt_rounds")
+    @classmethod
+    def _coste_bcrypt_en_rango(cls, valor: int) -> int:
+        if not COSTE_BCRYPT_MINIMO <= valor <= COSTE_BCRYPT_MAXIMO:
+            raise ValueError(
+                f"debe estar entre {COSTE_BCRYPT_MINIMO} y {COSTE_BCRYPT_MAXIMO}"
             )
         return valor
 

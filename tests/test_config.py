@@ -12,6 +12,8 @@ from pydantic import ValidationError
 
 from app.config import (
     CLAVES_PUBLICADAS,
+    COSTE_BCRYPT_MAXIMO,
+    COSTE_BCRYPT_MINIMO,
     LONGITUD_MINIMA_CLAVE,
     Settings,
     cargar_settings,
@@ -29,7 +31,7 @@ CLAVE_FILTRADA = "clave-que-simula-estar-publicada-en-github"
 @pytest.fixture
 def entorno_limpio(monkeypatch):
     """Sin variables de entorno ni fichero .env: el arranque desde cero."""
-    for variable in ("SECRET_KEY", "DATABASE_URL"):
+    for variable in ("SECRET_KEY", "DATABASE_URL", "BCRYPT_ROUNDS"):
         monkeypatch.delenv(variable, raising=False)
     yield
 
@@ -125,3 +127,39 @@ class TestArranque:
         monkeypatch.setenv("DATABASE_URL", URL_VALIDA)
 
         assert cargar_settings(env_file=None).secret_key.get_secret_value() == CLAVE_VALIDA
+
+
+class TestCosteBcrypt:
+    def test_por_defecto_es_12(self, entorno_limpio):
+        # El mismo que traía bcrypt: fijarlo no cambia los hashes de hoy, solo
+        # impide que los cambie una actualización de la librería.
+        settings = _construir(database_url=URL_VALIDA, secret_key=CLAVE_VALIDA)
+
+        assert settings.bcrypt_rounds == 12
+
+    def test_se_lee_del_entorno(self, entorno_limpio, monkeypatch):
+        monkeypatch.setenv("BCRYPT_ROUNDS", "13")
+
+        settings = _construir(database_url=URL_VALIDA, secret_key=CLAVE_VALIDA)
+
+        assert settings.bcrypt_rounds == 13
+
+    def test_rechaza_un_coste_por_debajo_del_minimo(self, entorno_limpio):
+        with pytest.raises(ValidationError) as error:
+            _construir(
+                database_url=URL_VALIDA,
+                secret_key=CLAVE_VALIDA,
+                bcrypt_rounds=COSTE_BCRYPT_MINIMO - 1,
+            )
+
+        assert str(COSTE_BCRYPT_MINIMO) in str(error.value)
+
+    def test_rechaza_un_coste_por_encima_del_maximo(self, entorno_limpio):
+        with pytest.raises(ValidationError) as error:
+            _construir(
+                database_url=URL_VALIDA,
+                secret_key=CLAVE_VALIDA,
+                bcrypt_rounds=COSTE_BCRYPT_MAXIMO + 1,
+            )
+
+        assert str(COSTE_BCRYPT_MAXIMO) in str(error.value)

@@ -7,12 +7,30 @@ import jwt
 
 from app.config import settings
 
+# Mínimo al elegir contraseña, en caracteres.
+LONGITUD_MINIMA_CONTRASENA = 8
+# bcrypt solo usa los primeros 72 BYTES de la contraseña, y con lo que sobra
+# cada versión hace una cosa: descartarlo sin avisar o lanzar ValueError. El
+# límite se comprueba aquí para no depender de cuál esté instalada.
+LONGITUD_MAXIMA_CONTRASENA = 72
+
+
+def cabe_en_bcrypt(password: str) -> bool:
+    return len(password.encode("utf-8")) <= LONGITUD_MAXIMA_CONTRASENA
+
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    if not cabe_en_bcrypt(password):
+        raise ValueError(f"La contraseña ocupa más de {LONGITUD_MAXIMA_CONTRASENA} bytes")
+    sal = bcrypt.gensalt(rounds=settings.bcrypt_rounds)
+    return bcrypt.hashpw(password.encode("utf-8"), sal).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:
+    # Una contraseña que no cabe no se admite al elegirla, así que no puede ser
+    # la buena: es una contraseña incorrecta más, no un error del servidor.
+    if not cabe_en_bcrypt(password):
+        return False
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
