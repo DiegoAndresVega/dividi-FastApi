@@ -163,3 +163,9 @@ class TestCosteBcrypt:
             )
 
         assert str(COSTE_BCRYPT_MAXIMO) in str(error.value)
+
+    def test_rechaza_un_coste_que_dejaria_el_login_sin_responder(self, entorno_limpio):
+        # Cada punto duplica el tiempo: con 15 un hash pasa de 1 s, y con el
+        # tope de CPU del contenedor unos pocos logins a la vez lo acaparan.
+        with pytest.raises(ValidationError):
+            _construir(database_url=URL_VALIDA, secret_key=CLAVE_VALIDA, bcrypt_rounds=15)

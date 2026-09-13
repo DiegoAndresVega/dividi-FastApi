@@ -27,9 +27,11 @@ LONGITUD_MINIMA_CLAVE = 32
 ALGORITMOS_ADMITIDOS = ("HS256", "HS384", "HS512")
 
 # Coste de bcrypt admitido. Por debajo de 10 un hash se calcula demasiado
-# rápido para frenar a quien tenga la base de datos; 31 es el tope de bcrypt.
+# rápido para frenar a quien tenga la base de datos. Por encima de 14 pasa de
+# un segundo por hash (medido en la VPS: 12 ≈ 0,25 s y cada punto duplica), y
+# con la CPU limitada del contenedor unos pocos logins a la vez la acaparan.
 COSTE_BCRYPT_MINIMO = 10
-COSTE_BCRYPT_MAXIMO = 31
+COSTE_BCRYPT_MAXIMO = 14
 
 ENTORNO_DESARROLLO = "dev"
 ENTORNO_PRODUCCION = "prod"
