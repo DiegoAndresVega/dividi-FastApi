@@ -1,7 +1,10 @@
 import hashlib
+import ipaddress
 
-from pydantic import SecretStr, ValidationError, field_validator
+from pydantic import SecretStr, ValidationError, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 # Claves de ejemplo que en algún momento estuvieron escritas en este repositorio.
 # Siguen en el historial público de git, así que firmar tokens con una de ellas
@@ -43,6 +46,11 @@ _COMO_GENERARLA = 'python -c "import secrets; print(secrets.token_hex(32))"'
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # Por defecto "prod": olvidar la variable debe dejar la app en su modo más
+    # cerrado, no en el más cómodo. Va antes que database_url porque el
+    # validador de esa la consulta, y Pydantic valida en orden de declaración.
+    environment: str = ENTORNO_PRODUCCION
+
     # Sin valor por defecto a propósito: son obligatorias. Un valor por defecto
     # aquí significa que la API arranca igual con una configuración equivocada.
     # SecretStr y no str: el objeto Settings viaja por toda la aplicación, y
@@ -53,10 +61,6 @@ class Settings(BaseSettings):
     # propósito con .get_secret_value().
     database_url: SecretStr
     secret_key: SecretStr
-
-    # Por defecto "prod": olvidar la variable debe dejar la app en su modo más
-    # cerrado, no en el más cómodo.
-    environment: str = ENTORNO_PRODUCCION
 
     algorithm: str = "HS256"
     # Emisor y audiencia de los tokens. Atan un token a ESTA API y a ESTA app:
@@ -152,9 +156,51 @@ class Settings(BaseSettings):
 
         return secreto
 
+    @field_validator("database_url")
+    @classmethod
+    def _base_de_datos_fuera_del_contenedor(
+        cls, secreto: SecretStr, info: ValidationInfo
+    ) -> SecretStr:
+        host = _host_de(secreto.get_secret_value())
+
+        # Si environment no pasó su propio validador no está en info.data, y el
+        # arranque ya falla por ella.
+        es_produccion = info.data.get("environment") == ENTORNO_PRODUCCION
+        if es_produccion and _es_local(host):
+            raise ValueError(
+                "apunta a localhost y ENVIRONMENT es prod; dentro del contenedor "
+                "localhost es el propio contenedor, no la base de datos. Usa el "
+                "nombre del servicio (db), o ENVIRONMENT=dev si es tu equipo"
+            )
+
+        return secreto
+
 
 def _esta_publicada(valor: str) -> bool:
     return hashlib.sha256(valor.encode("utf-8")).hexdigest() in CLAVES_PUBLICADAS
+
+
+def _host_de(url: str) -> str | None:
+    # Se lee con el mismo analizador que usará create_engine. Su error no es un
+    # ValueError: Pydantic no lo recogería y el arranque saldría con un
+    # traceback de SQLAlchemy en vez de con el mensaje de cargar_settings.
+    try:
+        return make_url(url).host
+    except ArgumentError:
+        raise ValueError("no es una URL de base de datos válida") from None
+
+
+def _es_local(host: str | None) -> bool:
+    # Sin host (SQLite, socket Unix) no hay nada con lo que comparar.
+    if not host:
+        return False
+    if host.lower() == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_unspecified
 
 
 def _describir(error: ValidationError) -> str:
