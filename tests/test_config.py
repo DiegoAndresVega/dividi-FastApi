@@ -21,6 +21,7 @@ from app.config import (
 
 CLAVE_VALIDA = "x" * LONGITUD_MINIMA_CLAVE
 URL_VALIDA = "postgresql+psycopg2://usuario:clave@servidor:5432/base"
+URL_EN_LOCALHOST = "postgresql+psycopg2://usuario:clave@localhost:5432/base"
 
 # Simula una clave que estuvo publicada. No se usa la real: el criterio del
 # punto de seguridad pide que esa cadena no aparezca en el repositorio, y aquí
@@ -31,7 +32,7 @@ CLAVE_FILTRADA = "clave-que-simula-estar-publicada-en-github"
 @pytest.fixture
 def entorno_limpio(monkeypatch):
     """Sin variables de entorno ni fichero .env: el arranque desde cero."""
-    for variable in ("SECRET_KEY", "DATABASE_URL", "BCRYPT_ROUNDS"):
+    for variable in ("SECRET_KEY", "DATABASE_URL", "BCRYPT_ROUNDS", "ENVIRONMENT"):
         monkeypatch.delenv(variable, raising=False)
     yield
 
@@ -96,6 +97,48 @@ class TestDatabaseUrl:
 
         assert "database_url" in str(error.value).lower()
 
+    @pytest.mark.parametrize(
+        "host", ["localhost", "LOCALHOST", "127.0.0.1", "127.0.1.1", "[::1]", "0.0.0.0"]
+    )
+    def test_rechaza_localhost_en_produccion(self, entorno_limpio, host):
+        # Dentro del contenedor, localhost es el propio contenedor y no la base
+        # de datos: la API arrancaría y fallaría en la primera petición.
+        url = f"postgresql+psycopg2://usuario:clave@{host}:5432/base"
+
+        with pytest.raises(ValidationError) as error:
+            _construir(database_url=url, secret_key=CLAVE_VALIDA, environment="prod")
+
+        assert "localhost" in str(error.value).lower()
+
+    def test_sin_environment_tambien_se_rechaza(self, entorno_limpio):
+        # prod es el valor por defecto: olvidar la variable no relaja la regla.
+        with pytest.raises(ValidationError):
+            _construir(database_url=URL_EN_LOCALHOST, secret_key=CLAVE_VALIDA)
+
+    def test_acepta_localhost_en_desarrollo(self, entorno_limpio):
+        settings = _construir(
+            database_url=URL_EN_LOCALHOST, secret_key=CLAVE_VALIDA, environment="dev"
+        )
+
+        assert settings.es_desarrollo
+
+    def test_acepta_el_nombre_del_servicio_en_produccion(self, entorno_limpio):
+        url = "postgresql+psycopg2://usuario:clave@db:5432/base"
+
+        assert _construir(database_url=url, secret_key=CLAVE_VALIDA, environment="prod")
+
+    def test_no_juzga_una_url_sin_host(self, entorno_limpio):
+        # SQLite en memoria, la de la suite: no hay host con el que comparar.
+        assert _construir(
+            database_url="sqlite://", secret_key=CLAVE_VALIDA, environment="prod"
+        )
+
+    def test_rechaza_una_url_ilegible(self, entorno_limpio):
+        with pytest.raises(ValidationError) as error:
+            _construir(database_url="esto no es una url", secret_key=CLAVE_VALIDA)
+
+        assert "database_url" in str(error.value).lower()
+
 
 class TestArranque:
     def test_aborta_con_un_mensaje_claro(
@@ -121,6 +164,30 @@ class TestArranque:
         assert "SECRET_KEY" in mensaje
         assert "DATABASE_URL" in mensaje
         assert "obligatoria" in mensaje
+
+    def test_aborta_si_la_base_de_datos_esta_en_localhost(self, entorno_limpio, monkeypatch):
+        monkeypatch.setenv("SECRET_KEY", CLAVE_VALIDA)
+        monkeypatch.setenv("DATABASE_URL", URL_EN_LOCALHOST)
+
+        with pytest.raises(SystemExit) as salida:
+            cargar_settings(env_file=None)
+
+        mensaje = str(salida.value)
+        assert "DATABASE_URL" in mensaje
+        assert "localhost" in mensaje
+        # Ni la contraseña de la base de datos ni la URL entera en el log.
+        assert "usuario:clave" not in mensaje
+
+    def test_aborta_con_una_url_ilegible_sin_traceback_de_sqlalchemy(
+        self, entorno_limpio, monkeypatch
+    ):
+        monkeypatch.setenv("SECRET_KEY", CLAVE_VALIDA)
+        monkeypatch.setenv("DATABASE_URL", "esto no es una url")
+
+        with pytest.raises(SystemExit) as salida:
+            cargar_settings(env_file=None)
+
+        assert "DATABASE_URL" in str(salida.value)
 
     def test_no_aborta_con_configuracion_valida(self, entorno_limpio, monkeypatch):
         monkeypatch.setenv("SECRET_KEY", CLAVE_VALIDA)
