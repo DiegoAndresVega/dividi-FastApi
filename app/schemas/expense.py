@@ -12,8 +12,16 @@ from app.models.expense import (
     SplitMethod,
 )
 from app.schemas.group import CurrencyCode, Percentage
+from app.schemas.limites import (
+    MAX_IMPORTE,
+    MAX_MIEMBROS_POR_GRUPO,
+    MAX_PARTES,
+    Descripcion,
+)
 
-Money = Annotated[Decimal, Field(gt=0, le=Decimal("9999999999"), decimal_places=2)]
+Money = Annotated[Decimal, Field(gt=0, le=MAX_IMPORTE, decimal_places=2)]
+# Un reparto no puede tener más líneas que miembros el grupo.
+Splits = Annotated[list["SplitInput"], Field(max_length=MAX_MIEMBROS_POR_GRUPO)]
 
 # Nombre de categoría: libre pero normalizado (sin espacios sobrantes y en
 # minúsculas) para que «Agua» y «agua» sean la misma a la hora de agrupar.
@@ -38,12 +46,15 @@ CategoryIcon = Annotated[
 class SplitInput(BaseModel):
     group_member_id: UUID
     percentage: Optional[Percentage] = None
-    exact_amount: Optional[Decimal] = Field(default=None, ge=0, decimal_places=2)
-    shares: Optional[int] = Field(default=None, gt=0)
+    # ge=0 y no gt=0: un reparto exacto puede dejar a alguien a cero.
+    exact_amount: Optional[Decimal] = Field(
+        default=None, ge=0, le=MAX_IMPORTE, decimal_places=2
+    )
+    shares: Optional[int] = Field(default=None, gt=0, le=MAX_PARTES)
 
 
 class ExpenseCreate(BaseModel):
-    description: str = Field(min_length=1, max_length=500)
+    description: Descripcion
     amount: Money
     currency: Optional[CurrencyCode] = None
     category: CategoryName = DEFAULT_CATEGORY
@@ -53,11 +64,11 @@ class ExpenseCreate(BaseModel):
     # opcional para "equal" (por defecto: todos los miembros) y "percentage"
     # (por defecto: default_percentage de cada miembro del grupo);
     # obligatorio para "exact" y "shares"
-    splits: Optional[list[SplitInput]] = None
+    splits: Optional[Splits] = None
 
 
 class ExpenseUpdate(BaseModel):
-    description: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    description: Optional[Descripcion] = None
     amount: Optional[Money] = None
     currency: Optional[CurrencyCode] = None
     category: Optional[CategoryName] = None
@@ -66,7 +77,7 @@ class ExpenseUpdate(BaseModel):
     category_icon: Optional[CategoryIcon] = None
     paid_by: Optional[UUID] = None
     split_method: Optional[SplitMethod] = None
-    splits: Optional[list[SplitInput]] = None
+    splits: Optional[Splits] = None
 
 
 class SplitOut(BaseModel):

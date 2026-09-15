@@ -6,9 +6,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.models.group import MemberRole
+# CurrencyCode se reexporta desde aquí: expense.py y los routers ya lo
+# importaban de este módulo cuando vivía en él.
+from app.schemas.limites import MAX_MIEMBROS_POR_GRUPO, CurrencyCode, Nombre
 
 Percentage = Annotated[Decimal, Field(ge=0, le=100, decimal_places=2)]
-CurrencyCode = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
+# Un rebalanceo toca a los miembros del grupo, así que no puede tener más
+# entradas que miembros caben.
+Rebalance = Annotated[
+    dict[UUID, Percentage], Field(max_length=MAX_MIEMBROS_POR_GRUPO)
+]
 
 
 class GroupMemberInit(BaseModel):
@@ -19,7 +26,7 @@ class GroupMemberInit(BaseModel):
     registra).
     """
 
-    display_name: str = Field(min_length=1, max_length=255)
+    display_name: Nombre
     email: Optional[EmailStr] = None
     # id de un amigo (usuario con cuenta) para añadirlo enlazado a su cuenta
     user_id: Optional[UUID] = None
@@ -27,17 +34,19 @@ class GroupMemberInit(BaseModel):
 
 
 class GroupCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=255)
+    name: Nombre
     default_currency: CurrencyCode = "EUR"
     # peso del creador en el hogar; si se añaden invitados y no se indica, se
     # calcula como el resto hasta 100
     owner_percentage: Optional[Percentage] = None
     # invitados a crear junto con el grupo (además del creador)
-    members: list[GroupMemberInit] = Field(default_factory=list)
+    members: list[GroupMemberInit] = Field(
+        default_factory=list, max_length=MAX_MIEMBROS_POR_GRUPO
+    )
 
 
 class GroupUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    name: Optional[Nombre] = None
     default_currency: Optional[CurrencyCode] = None
 
 
@@ -75,9 +84,9 @@ class MemberAdd(BaseModel):
     email: Optional[EmailStr] = None
     # id de un amigo (usuario con cuenta) para añadirlo enlazado a su cuenta
     user_id: Optional[UUID] = None
-    display_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    display_name: Optional[Nombre] = None
     default_percentage: Percentage = Decimal("0")
-    rebalance: Optional[dict[UUID, Percentage]] = None
+    rebalance: Optional[Rebalance] = None
 
     @model_validator(mode="after")
     def _identifica_al_miembro(self):
@@ -87,14 +96,14 @@ class MemberAdd(BaseModel):
 
 
 class MemberUpdate(BaseModel):
-    display_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    display_name: Optional[Nombre] = None
     role: Optional[MemberRole] = None
     default_percentage: Optional[Percentage] = None
-    rebalance: Optional[dict[UUID, Percentage]] = None
+    rebalance: Optional[Rebalance] = None
 
 
 class MemberRemove(BaseModel):
-    rebalance: Optional[dict[UUID, Percentage]] = None
+    rebalance: Optional[Rebalance] = None
 
 
 class BalanceOut(BaseModel):

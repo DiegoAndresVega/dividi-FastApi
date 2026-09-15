@@ -7,14 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.expense import DEFAULT_CATEGORY
 from app.schemas.expense import CategoryIcon, CategoryName, Money
+from app.schemas.limites import Descripcion, Periodo as Period
 
 # 1–28 para que el día exista en todos los meses (adiós, 31 de febrero)
 DayOfMonth = Annotated[int, Field(ge=1, le=28)]
-Period = Annotated[str, Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
 
 
 class RecurringCreate(BaseModel):
-    description: str = Field(min_length=1, max_length=500)
+    description: Descripcion
     amount: Money
     category: CategoryName = DEFAULT_CATEGORY
     category_icon: Optional[CategoryIcon] = None
@@ -27,7 +27,7 @@ class RecurringCreate(BaseModel):
 
 
 class RecurringUpdate(BaseModel):
-    description: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    description: Optional[Descripcion] = None
     amount: Optional[Money] = None
     category: Optional[CategoryName] = None
     # None con el campo presente = quitar el emoji (el router mira model_fields_set)
