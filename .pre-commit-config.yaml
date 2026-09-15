@@ -1,0 +1,29 @@
+# Guardia para que un secreto no llegue nunca a un commit.
+#
+# Instalación, una vez por cada copia del repositorio:
+#
+#     brew install gitleaks pre-commit
+#     pre-commit install
+#
+# Se usa `repo: local` y no el hook oficial de gitleaks a propósito: aquel se
+# declara `language: golang`, así que pre-commit se descarga una cadena de
+# compilación de Go y construye el binario desde el código. Aquí gitleaks se
+# instala con el gestor de paquetes del sistema, como cualquier otra
+# herramienta de desarrollo, y el hook se limita a llamarlo.
+repos:
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks · buscar secretos en lo que se va a commitear
+        # --staged mira SOLO lo que está en el índice, que es exactamente lo
+        # que va a quedar escrito en el commit; el árbol de trabajo entero no
+        # interesa aquí y tardaría más.
+        # --redact evita que el propio aviso imprima el secreto por pantalla y
+        # acabe en el historial del terminal; --verbose es lo que hace que salga
+        # el fichero y la línea, porque sin él el aviso es solo un recuento y no
+        # dice dónde mirar.
+        entry: gitleaks git --staged --redact --verbose --no-banner
+        language: system
+        # gitleaks lee el índice por su cuenta: pasarle la lista de ficheros
+        # de pre-commit haría que analizase el árbol en vez de lo indexado.
+        pass_filenames: false

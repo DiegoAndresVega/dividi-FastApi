@@ -130,7 +130,7 @@ class TestAlgoritmo:
         with pytest.raises(ValueError):
             settings.__class__(
                 database_url="sqlite://",
-                secret_key="clave-de-pruebas-no-usar-en-produccion-0123456789",
+                secret_key="clave-de-pruebas-no-usar-en-produccion-0123456789",  # gitleaks:allow
                 algorithm="none",
             )
 
