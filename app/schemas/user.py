@@ -5,6 +5,12 @@ from uuid import UUID
 from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field
 from pydantic_core import PydanticCustomError
 
+from app.schemas.limites import (
+    ContrasenaRecibida,
+    Nombre,
+    RangoDeclarado,
+    TokenRecibido,
+)
 from app.security import (
     LONGITUD_MAXIMA_CONTRASENA,
     LONGITUD_MINIMA_CONTRASENA,
@@ -31,16 +37,20 @@ ContrasenaNueva = Annotated[
     str,
     Field(min_length=LONGITUD_MINIMA_CONTRASENA),
     AfterValidator(_cabe_en_bcrypt),
+    RangoDeclarado(
+        f"entre {LONGITUD_MINIMA_CONTRASENA} caracteres y "
+        f"{LONGITUD_MAXIMA_CONTRASENA} bytes de bcrypt"
+    ),
 ]
 
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: ContrasenaNueva
-    name: str = Field(min_length=1, max_length=255)
+    name: Nombre
     # código de invitación (obligatorio salvo para el fundador o si se
     # desactiva require_invite en config)
-    invite_code: Optional[str] = Field(default=None, max_length=64)
+    invite_code: Optional[str] = Field(default=None, min_length=1, max_length=64)
 
 
 class UserOut(BaseModel):
@@ -55,11 +65,11 @@ class UserOut(BaseModel):
 class UserUpdate(BaseModel):
     """Campos editables del propio perfil (PATCH /me)."""
 
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    name: Optional[Nombre] = None
 
 
 class PasswordChange(BaseModel):
-    current_password: str
+    current_password: ContrasenaRecibida
     new_password: ContrasenaNueva
 
 
@@ -70,4 +80,4 @@ class Token(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: TokenRecibido

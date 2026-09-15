@@ -7,19 +7,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.savings import SavingsEntryKind
 from app.schemas.expense import Money
-
-MAX_AMOUNT = Decimal("9999999999")
+from app.schemas.limites import MAX_IMPORTE, NombreDePlan, Periodo as Period
 
 # Cantidad que admite 0 (hucha inicial, o un mes en el que no se logró nada).
-NonNegativeMoney = Annotated[Decimal, Field(ge=0, le=MAX_AMOUNT, decimal_places=2)]
+NonNegativeMoney = Annotated[Decimal, Field(ge=0, le=MAX_IMPORTE, decimal_places=2)]
 # Cantidad con signo: los ajustes de la hucha pueden restar.
-SignedMoney = Annotated[Decimal, Field(ge=-MAX_AMOUNT, le=MAX_AMOUNT, decimal_places=2)]
-# Mes en formato «2026-07».
-Period = Annotated[str, Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
+SignedMoney = Annotated[Decimal, Field(ge=-MAX_IMPORTE, le=MAX_IMPORTE, decimal_places=2)]
 
 
 class SavingsPlanCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
+    name: NombreDePlan
     target_amount: Money
     monthly_amount: Money
     # dinero ya apartado al crear el plan (opcional)
@@ -27,7 +24,7 @@ class SavingsPlanCreate(BaseModel):
 
 
 class SavingsPlanUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    name: Optional[NombreDePlan] = None
     target_amount: Optional[Money] = None
     monthly_amount: Optional[Money] = None
 

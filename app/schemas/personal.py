@@ -7,19 +7,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.expense import DEFAULT_CATEGORY
 from app.schemas.expense import CategoryIcon, CategoryName, Money
+from app.schemas.limites import MAX_PRESUPUESTOS, Descripcion, FechaRazonable
 
 
 class PersonalExpenseCreate(BaseModel):
-    description: str = Field(min_length=1, max_length=500)
+    description: Descripcion
     amount: Money
     category: CategoryName = DEFAULT_CATEGORY
     category_icon: Optional[CategoryIcon] = None
     # opcional: apuntar un gasto de otro día (los gastos hormiga se apuntan tarde)
-    created_at: Optional[datetime] = None
+    created_at: Optional[FechaRazonable] = None
 
 
 class PersonalExpenseUpdate(BaseModel):
-    description: Optional[str] = Field(default=None, min_length=1, max_length=500)
+    description: Optional[Descripcion] = None
     amount: Optional[Money] = None
     category: Optional[CategoryName] = None
     # None con el campo presente = quitar el emoji (el router mira model_fields_set)
@@ -46,7 +47,9 @@ class FinancesUpdate(BaseModel):
     """PUT /me/finances: documento completo (los budgets se reemplazan)."""
 
     monthly_income: Optional[Money] = None
-    budgets: list[BudgetItem] = []
+    budgets: list[BudgetItem] = Field(
+        default_factory=list, max_length=MAX_PRESUPUESTOS
+    )
 
 
 class FinancesOut(BaseModel):
