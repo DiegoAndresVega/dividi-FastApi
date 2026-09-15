@@ -1,7 +1,11 @@
 __pycache__/
 *.pyc
 .venv/
-.env
+# Cualquier variante (.env, .env.prod, .env.local) queda fuera: el riesgo no
+# es el fichero que ya conocemos, sino el que alguien cree mañana con otro
+# nombre. La plantilla sin valores sí se versiona.
+.env*
+!.env.example
 .pytest_cache/
 .coverage
 htmlcov/

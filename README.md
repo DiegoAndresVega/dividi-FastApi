@@ -15,6 +15,34 @@ docker compose up --build
 
 API en `http://localhost:8000` — Swagger UI en `http://localhost:8000/docs`.
 
+### Guardia de secretos
+
+Antes de trabajar sobre el repositorio, instala el hook que impide commitear una credencial:
+
+```bash
+brew install gitleaks pre-commit
+pre-commit install
+```
+
+A partir de ahí, cada `git commit` pasa [gitleaks](https://github.com/gitleaks/gitleaks) sobre
+lo que hay en el índice. Si encuentra algo con forma de clave, el commit no se crea y el aviso
+sale con el valor tapado. Para comprobar que está puesto:
+
+```bash
+echo 'SECRET_KEY="8f3c1d9b74a25e60af18c3d5729be4610cd8a37f92b45e08d1c6f2a49b73e5d0"' > prueba.txt  # gitleaks:allow
+git add prueba.txt && git commit -m "prueba"   # debe fallar
+git restore --staged prueba.txt && rm prueba.txt
+```
+
+Para esa comprobación no sirve una credencial de ejemplo sacada de la documentación de un
+proveedor: gitleaks las tiene en su lista de permitidas —la clave de AWS que aparece en sus
+manuales lleva `EXAMPLE` dentro— y el commit pasaría, haciendo creer que el hook no está.
+
+Un valor de pruebas que salte sin serlo se marca en su propia línea con un comentario
+`gitleaks:allow`. La verificación del lado del servidor —*push protection* y escaneo de
+secretos de GitHub— está activada en el repositorio y **no depende de este hook**: el hook
+avisa antes de escribir el commit, que es cuando arreglarlo todavía es gratis.
+
 Sin Docker (necesita un PostgreSQL local, o solo para los tests):
 
 ```bash
