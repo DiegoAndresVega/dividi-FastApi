@@ -1,5 +1,6 @@
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
+from app.models.login_attempt import LoginAttempt
 from app.models.group import Group, GroupMember, MemberRole
 from app.models.expense import Expense, ExpenseSplit, SplitMethod
 from app.models.payment import Payment
@@ -18,6 +19,7 @@ from app.models.notification import (
 __all__ = [
     "User",
     "RefreshToken",
+    "LoginAttempt",
     "Group",
     "GroupMember",
     "MemberRole",
