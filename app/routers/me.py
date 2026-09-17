@@ -4,10 +4,11 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
+from app.rate_limit import respuesta_frenada
 from app.security_events import registrar
 from app.schemas.user import PasswordChange, UserOut, UserUpdate
 from app.security import hash_password, verify_password
-from app.services import refresh_token_service
+from app.services import login_attempt_service, refresh_token_service
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -37,11 +38,27 @@ def change_password(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    # Mismo marcador que el del login, porque es la misma contraseña la que se
+    # está probando: con un token robado, este endpoint sería la puerta de al
+    # lado para adivinarla sin que el freno del login se entere.
+    espera = login_attempt_service.espera_restante(db, user.email)
+    if espera:
+        registrar("cambio_de_contrasena_frenado", request, user_id=user.id)
+        raise respuesta_frenada(espera)
+
     if not verify_password(payload.current_password, user.hashed_password):
-        registrar("cambio_de_contrasena_fallido", request, user_id=user.id)
+        espera = login_attempt_service.anotar_fallo(db, user.email)
+        db.commit()
+        registrar(
+            "cambio_de_contrasena_fallido",
+            request,
+            user_id=user.id,
+            espera_segundos=espera,
+        )
         raise HTTPException(
             status_code=400, detail="La contraseña actual no es correcta"
         )
+    login_attempt_service.olvidar(db, user.email)
     user.hashed_password = hash_password(payload.new_password)
     # La contraseña se cambia cuando se sospecha que alguien más entró, y su
     # refresh token seguiría valiendo un año. Se cierran todas las sesiones,

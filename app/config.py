@@ -95,6 +95,19 @@ class Settings(BaseSettings):
     default_rate_limit: str = "240/minute"
     # Login/registro: estrictos, frenan fuerza bruta (bcrypt es caro a propósito).
     auth_rate_limit: str = "10/minute"
+    # --- Freno por cuenta (el de arriba es por IP) ---
+    # Fallos seguidos contra el mismo email antes de empezar a imponer espera.
+    # 5 deja margen de sobra a quien se equivoca al teclear.
+    login_fallos_antes_de_frenar: int = 5
+    # Primera espera; cada fallo posterior la duplica.
+    login_espera_base_segundos: int = 60
+    # Tope de la espera. Acotado a propósito: un bloqueo que crece sin fin
+    # convierte el freno en la forma más cómoda de dejar a alguien fuera de su
+    # cuenta. Con 15 minutos, un ataque baja a cuatro intentos por hora.
+    login_espera_maxima_segundos: int = 15 * 60
+    # Sin fallos durante este tiempo, el marcador vuelve a cero: dos despistes
+    # con un mes de diferencia no son un ataque.
+    login_ventana_olvido_segundos: int = 60 * 60
     # Tamaño máximo de cuerpo de una petición (bytes). Cubre el tique de 5 MB
     # con holgura para el envoltorio multipart; rechaza cuerpos enormes antes
     # de leerlos en memoria.

@@ -22,12 +22,14 @@ def rate_limit_on():
 
 
 def test_login_is_rate_limited(client, rate_limit_on):
-    # el límite de auth es 10/minuto: al 11.º intento salta el 429
+    # el límite de auth es 10/minuto POR IP: al 11.º intento salta el 429.
+    # Cada intento va contra un email distinto para medir solo eso: contra el
+    # mismo, el freno por cuenta (test_freno_por_cuenta.py) salta antes.
     codes = [
         client.post(
-            "/auth/login", data={"username": "x@example.com", "password": "nope"}
+            "/auth/login", data={"username": f"x{numero}@example.com", "password": "nope"}
         ).status_code
-        for _ in range(11)
+        for numero in range(11)
     ]
 
     assert codes.count(401) == 10

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import GroupMember, RefreshToken, User
-from app.rate_limit import auth_limit, limiter
+from app.rate_limit import auth_limit, limiter, respuesta_frenada
 from app.schemas.user import RefreshRequest, Token, UserCreate, UserOut
 from app.security import (
     create_access_token,
@@ -18,7 +18,7 @@ from app.security import (
     verify_password,
 )
 from app.security_events import registrar
-from app.services import invitation_service, refresh_token_service
+from app.services import invitation_service, login_attempt_service, refresh_token_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -77,20 +77,41 @@ def login(
     form: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
+    espera = login_attempt_service.espera_restante(db, form.username)
+    if espera:
+        # Antes de mirar la contraseña: mientras la cuenta está frenada no se
+        # comprueba nada, ni siquiera si acertó. Si no, veinte IPs distintas
+        # prueban veinte contraseñas sin que el límite por IP se entere.
+        registrar("login_frenado", request, espera_segundos=espera)
+        raise respuesta_frenada(espera)
+
     user = db.scalar(select(User).where(User.email == form.username.lower()))
     if user is None or not verify_password(form.password, user.hashed_password):
         # Sin el email: un registro de intentos fallidos con el email dentro es
         # una lista de correos válidos para quien llegue a leer los logs. El id
         # solo se pone cuando el usuario existe, que ya dice si el fallo fue de
-        # contraseña o de cuenta inexistente.
-        registrar("login_fallido", request, user_id=user.id if user else None)
+        # contraseña o de cuenta inexistente. Se lee antes del commit, que
+        # caduca el objeto y obligaría a volver a la base a por el mismo dato.
+        user_id = user.id if user else None
+        espera = login_attempt_service.anotar_fallo(db, form.username)
+        # el fallo se guarda aunque la petición acabe en error: sin commit
+        # explícito, la excepción se lleva por delante lo que acaba de contarse
+        db.commit()
+        registrar(
+            "login_fallido",
+            request,
+            user_id=user_id,
+            espera_segundos=espera,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    login_attempt_service.olvidar(db, form.username)
     # el login abre familia nueva; de paso se tiran las filas ya caducadas
     refresh_token_service.limpiar_caducados(db)
+    login_attempt_service.limpiar_caducados(db)
     tokens = Token(
         access_token=create_access_token(user.id),
         refresh_token=refresh_token_service.emitir(db, user.id),
