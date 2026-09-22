@@ -18,7 +18,12 @@ from app.security import (
     verify_password,
 )
 from app.security_events import registrar
-from app.services import invitation_service, login_attempt_service, refresh_token_service
+from app.services import (
+    borrado_de_cuenta_service,
+    invitation_service,
+    login_attempt_service,
+    refresh_token_service,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -86,6 +91,12 @@ def login(
         raise respuesta_frenada(espera)
 
     user = db.scalar(select(User).where(User.email == form.username.lower()))
+    # Una cuenta borrada deja su fila puesta (ver borrado_de_cuenta_service) con
+    # una contraseña aleatoria que nadie conoce. Mirar `deleted_at` aquí es
+    # defensa en profundidad: si alguien le pusiera una contraseña conocida
+    # desde la base o desde scripts/reset_password.py, esto lo para igual.
+    if user is not None and borrado_de_cuenta_service.esta_borrada(user):
+        user = None
     if user is None or not verify_password(form.password, user.hashed_password):
         # Sin el email: un registro de intentos fallidos con el email dentro es
         # una lista de correos válidos para quien llegue a leer los logs. El id

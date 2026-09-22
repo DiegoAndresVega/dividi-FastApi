@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Group, GroupMember, MemberRole, User
 from app.security import decode_token
+from app.services import borrado_de_cuenta_service
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -35,6 +36,11 @@ def get_current_user(
 
     user = db.get(User, user_id)
     if user is None:
+        raise credentials_error
+    # Una cuenta borrada conserva su fila (ver borrado_de_cuenta_service), así
+    # que hay que rechazarla aquí: sin esto, un access token emitido antes del
+    # borrado seguiría entrando hasta que caducase.
+    if borrado_de_cuenta_service.esta_borrada(user):
         raise credentials_error
 
     # Lo recoge RegistroDeOperacionesMiddleware al terminar la petición. Se

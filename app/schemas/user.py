@@ -68,6 +68,13 @@ class UserUpdate(BaseModel):
     name: Optional[Nombre] = None
 
 
+class AccountDelete(BaseModel):
+    """DELETE /me: se pide la contraseña porque el borrado no tiene vuelta
+    atrás y un token robado no debería bastar para vaciarle la cuenta a nadie."""
+
+    password: ContrasenaRecibida
+
+
 class PasswordChange(BaseModel):
     current_password: ContrasenaRecibida
     new_password: ContrasenaNueva
