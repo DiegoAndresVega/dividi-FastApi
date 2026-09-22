@@ -6,9 +6,14 @@ from app.dependencies import get_current_user
 from app.models import User
 from app.rate_limit import respuesta_frenada
 from app.security_events import registrar
-from app.schemas.user import PasswordChange, UserOut, UserUpdate
+from app.schemas.user import AccountDelete, PasswordChange, UserOut, UserUpdate
 from app.security import hash_password, verify_password
-from app.services import login_attempt_service, refresh_token_service
+from app.services import (
+    borrado_de_cuenta_service,
+    datos_personales_service,
+    login_attempt_service,
+    refresh_token_service,
+)
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -72,3 +77,49 @@ def change_password(
         user_id=user.id,
         sesiones_cerradas=sesiones_cerradas,
     )
+
+@router.get("/export")
+def export_my_data(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Copia de los datos personales de la cuenta (RGPD, artículos 15 y 20)."""
+    registrar("export_de_datos_personales", request, user_id=user.id)
+    return datos_personales_service.exportar(db, user)
+
+
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(
+    request: Request,
+    payload: AccountDelete,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Borrado de la cuenta (RGPD, artículo 17).
+
+    Se pide la contraseña por lo mismo que en el cambio de contraseña: con un
+    token robado, este endpoint sería la forma más rápida de hacer daño.
+    """
+    espera = login_attempt_service.espera_restante(db, user.email)
+    if espera:
+        registrar("borrado_de_cuenta_frenado", request, user_id=user.id)
+        raise respuesta_frenada(espera)
+
+    if not verify_password(payload.password, user.hashed_password):
+        espera = login_attempt_service.anotar_fallo(db, user.email)
+        db.commit()
+        registrar(
+            "borrado_de_cuenta_fallido",
+            request,
+            user_id=user.id,
+            espera_segundos=espera,
+        )
+        raise HTTPException(status_code=400, detail="La contraseña no es correcta")
+
+    user_id = user.id
+    borrado_de_cuenta_service.anonimizar(db, user)
+    # Un solo commit: o se va todo (lo personal, los vínculos y la lápida) o no
+    # se va nada. Una cuenta a medio borrar es peor que una sin borrar.
+    db.commit()
+    registrar("borrado_de_cuenta", request, user_id=user_id)

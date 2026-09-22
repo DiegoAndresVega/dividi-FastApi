@@ -192,6 +192,8 @@ Settle-up sugiere 2 transacciones: `Bea → Ana: 30 €` y `Carlos → Ana: 30 �
 | GET | `/groups/{id}/balances` | Balance neto de cada miembro |
 | GET | `/groups/{id}/settle-up` | Transacciones sugeridas para saldar el grupo |
 | POST / GET | `/groups/{id}/payments` | Registrar / listar pagos entre miembros |
+| GET | `/me/export` | Copia de los datos personales de la cuenta (RGPD art. 15 y 20) |
+| DELETE | `/me` | Borrado de la cuenta, con la contraseña como confirmación (RGPD art. 17) |
 
 **Permisos**: solo el `admin` puede gestionar el grupo/miembros y editar/borrar gastos de otros; un `member` solo los suyos. Cualquier miembro consulta balances y registra gastos/pagos.
 
@@ -234,6 +236,58 @@ app/
 alembic/                  # migraciones
 tests/                    # 86 tests: unitarios + integración end-to-end
 ```
+
+## Datos personales (RGPD)
+
+La aplicación trata datos de personas en la UE, así que lleva registro de qué trata y por qué,
+y permite ejercer los derechos de acceso, portabilidad y supresión sin que nadie toque la base
+de datos a mano.
+
+### Registro de actividades de tratamiento (art. 30)
+
+| Tratamiento | Datos | Base legal (art. 6) | Conservación |
+|---|---|---|---|
+| Cuenta de usuario | Email, nombre, hash de la contraseña, fecha de alta | Ejecución del contrato (6.1.b) | Mientras la cuenta exista; se borra a petición |
+| Gastos y balances de grupo | Descripción, importe, categoría, fecha, reparto, quién pagó | Ejecución del contrato (6.1.b) | Mientras el grupo exista; sobrevive al borrado de un miembro, anonimizado |
+| Fotos de tiques | Imagen del tique; los metadatos EXIF se eliminan antes de guardarla (`receipts.py`) | Ejecución del contrato (6.1.b) | Mientras exista el gasto |
+| Gastos personales, nómina y ahorro | Importes declarados por la persona, solo visibles para ella | Ejecución del contrato (6.1.b) | Mientras la cuenta exista; se borra por completo al borrarla |
+| Amistades y notificaciones | Relación entre cuentas, avisos recibidos | Ejecución del contrato (6.1.b) | Mientras la cuenta exista; se borra por completo al borrarla |
+| Registro de seguridad | IP, momento, ruta, id de usuario, tipo de evento | Interés legítimo en la seguridad (6.1.f) | Rotación de los ficheros de log |
+| Freno de fuerza bruta | Huella SHA-256 del email e intentos fallidos | Interés legítimo en la seguridad (6.1.f) | Se poda en cada login correcto |
+
+**Responsable**: la persona que opera la instancia. **Encargados**: Hostinger (alojamiento de la
+VPS) y Cloudflare (proxy y TLS). No hay transferencias fuera del EEE más allá de las que cubran
+esos dos proveedores en sus propias condiciones.
+
+### Derecho de acceso y portabilidad (art. 15 y 20)
+
+`GET /me/export` devuelve, en JSON, el perfil, las finanzas personales, los gastos personales,
+los planes de ahorro, las amistades y, de cada grupo, los gastos y pagos que le afectan con su
+parte calculada. De los demás miembros solo aparece el nombre que usan **dentro del grupo**,
+porque sin él los importes no se entienden; nunca su email ni nada de su vida privada.
+
+### Derecho de supresión (art. 17)
+
+`DELETE /me`, con la contraseña como confirmación. La fila del usuario no se puede eliminar:
+los gastos de un grupo compartido apuntan a ella y son también datos de los demás miembros,
+cuyos balances quedarían descuadrados (art. 17.3). Lo que hace el borrado:
+
+- **se lleva lo que solo era suyo**: gastos personales, nómina, presupuestos, planes de ahorro,
+  notificaciones, amistades y todas las sesiones abiertas;
+- **desvincula sus miembros de grupo**: pasan a llamarse «Usuario eliminado», sin cuenta y sin
+  email de invitación, conservando los importes;
+- **vacía su email de la invitación que canjeó**, que su invitador ve en `GET /invitations`.
+  La fila se queda y el código sigue consumido: `validate_code` corta en `is_used` antes de
+  mirar el email. Las invitaciones que esa persona **creó** para otros no se tocan, porque ahí
+  el email reserva el código y borrarlo lo abriría a cualquiera;
+- **deja una lápida** en `users`: sin email real, sin nombre, con una contraseña que nadie puede
+  acertar y marcada con `deleted_at`, que rechazan tanto `get_current_user` como `/auth/login`.
+
+El email queda libre para volver a registrarse. Es importante que el borrado vacíe
+`group_members.invited_email`: el alta vincula miembros pendientes por esa columna, así que
+dejarla puesta metería a quien reutilizase la dirección en los grupos de la persona anterior.
+
+Lo implementa `app/services/borrado_de_cuenta_service.py`, y lo cubre `tests/test_rgpd.py`.
 
 ## Copias de seguridad
 
