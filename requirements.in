@@ -10,7 +10,7 @@
 # de Pydantic rompe cosas, y conviene enterarse al recompilar y no en el
 # despliegue.
 
-fastapi>=0.115,<1.0
+fastapi>=0.143.0,<1.0
 uvicorn[standard]>=0.30,<1.0
 sqlalchemy>=2.0.30,<3.0
 psycopg2-binary>=2.9,<3.0
